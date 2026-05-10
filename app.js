@@ -82,6 +82,10 @@ const state = {
   lastAnalysis: null,
   lastAnalyzedAt: "",
   analysisDirty: false,
+  aiAnalysis: null,
+  aiGeneratedAt: "",
+  aiDirty: false,
+  aiLoading: false,
   history: [],
 };
 
@@ -125,7 +129,11 @@ function cacheElements() {
   els.clientCode = document.getElementById("clientCode");
   els.sceneTitle = document.getElementById("sceneTitle");
   els.sessionAim = document.getElementById("sessionAim");
+  els.clientStory = document.getElementById("clientStory");
   els.sessionNotes = document.getElementById("sessionNotes");
+  els.aiAnalysisBtn = document.getElementById("aiAnalysisBtn");
+  els.aiStatus = document.getElementById("aiStatus");
+  els.aiAnalysisOutput = document.getElementById("aiAnalysisOutput");
   els.evidenceList = document.getElementById("evidenceList");
   els.safetyDialog = document.getElementById("safetyDialog");
   rakeContext = els.rakeCanvas.getContext("2d");
@@ -151,14 +159,21 @@ function bindEvents() {
   document.getElementById("smoothBtn").addEventListener("click", smoothSand);
   document.getElementById("randomSeedBtn").addEventListener("click", seedScene);
   els.analyzeBtn.addEventListener("click", runMicroAnalysis);
+  els.aiAnalysisBtn.addEventListener("click", requestAiAnalysis);
   document.getElementById("newSceneBtn").addEventListener("click", newScene);
   document.getElementById("saveLocalBtn").addEventListener("click", saveLocalSession);
   document.getElementById("saveServerBtn").addEventListener("click", saveServerSession);
   document.getElementById("exportBtn").addEventListener("click", exportReport);
   document.getElementById("copyReportBtn").addEventListener("click", copyReport);
 
-  [els.clientCode, els.sceneTitle, els.sessionAim, els.sessionNotes].forEach((input) => {
-    input.addEventListener("input", saveDraft);
+  [els.clientCode, els.sceneTitle, els.sessionAim, els.clientStory, els.sessionNotes].forEach((input) => {
+    input.addEventListener("input", () => {
+      if (input === els.clientStory || input === els.sessionNotes || input === els.sessionAim) {
+        if (state.aiAnalysis) state.aiDirty = true;
+        updateAiStatus();
+      }
+      saveDraft();
+    });
   });
 
   document.addEventListener("keydown", (event) => {
@@ -236,6 +251,7 @@ function render() {
   renderItems();
   invalidateAnalysis();
   updateAnalyzeStatus();
+  updateAiStatus();
   saveDraft();
 }
 
@@ -284,6 +300,7 @@ function renderAnalysis(analysis) {
   els.microSignalList.innerHTML = analysis.microSignals.map((signal) => `<li>${signal}</li>`).join("");
   els.themeList.innerHTML = analysis.themes.map((theme) => `<li>${theme}</li>`).join("");
   els.promptList.innerHTML = analysis.prompts.map((prompt) => `<li>${prompt}</li>`).join("");
+  updateAiStatus();
 }
 
 function renderAnalysisPlaceholder() {
@@ -298,14 +315,19 @@ function renderAnalysisPlaceholder() {
   els.microSignalList.innerHTML = `<li>等待记录第一物件、中心/边缘、重复、孤立、边界和连接等微线索。</li>`;
   els.themeList.innerHTML = `<li>当前尚未启动分析。</li>`;
   els.promptList.innerHTML = `<li>先让来访者完成摆放，再邀请其命名和讲述。</li>`;
+  updateAiStatus();
 }
 
 function runMicroAnalysis() {
   state.lastAnalysis = analyzeScene();
   state.lastAnalyzedAt = new Date().toISOString();
   state.analysisDirty = false;
+  if (state.aiAnalysis) {
+    state.aiDirty = true;
+  }
   renderAnalysis(state.lastAnalysis);
   updateAnalyzeStatus();
+  updateAiStatus();
   notify("见微知著分析已生成");
 }
 
@@ -315,8 +337,10 @@ function invalidateAnalysis() {
     return;
   }
   state.analysisDirty = true;
+  if (state.aiAnalysis) state.aiDirty = true;
   els.analysisState.textContent = "沙盘已经改变。右侧仍保留上一次分析，点击底部按钮可重新生成。";
   els.analysisState.classList.add("stale");
+  updateAiStatus();
 }
 
 function updateAnalyzeStatus() {
@@ -330,6 +354,162 @@ function updateAnalyzeStatus() {
   els.analyzeStatus.textContent = state.analysisDirty
     ? `沙盘已改变，当前有 ${count} 个微缩物。`
     : `已分析 ${state.lastAnalysis.itemCount} 个微缩物。`;
+}
+
+function updateAiStatus(message) {
+  if (!els.aiStatus || !els.aiAnalysisBtn) return;
+  if (message) {
+    els.aiStatus.textContent = message;
+    return;
+  }
+  if (state.aiLoading) {
+    els.aiAnalysisBtn.disabled = true;
+    els.aiAnalysisBtn.textContent = "解读中...";
+    els.aiStatus.textContent = "AI 正在整合沙盘结构、来访者讲述和咨询师记录。";
+    return;
+  }
+
+  els.aiAnalysisBtn.disabled = false;
+  if (!state.lastAnalysis) {
+    els.aiAnalysisBtn.textContent = "AI 解读";
+    els.aiStatus.textContent = "先点击沙盘下方的“开始分析”，再使用 AI 深度解读。";
+    return;
+  }
+
+  if (state.aiAnalysis) {
+    els.aiAnalysisBtn.textContent = state.aiDirty ? "重新 AI 解读" : "再次 AI 解读";
+    els.aiStatus.textContent = state.aiDirty
+      ? "沙盘或本地分析已改变，当前 AI 解读可能过期。"
+      : `AI 已在 ${new Date(state.aiGeneratedAt).toLocaleTimeString()} 生成解读；请结合来访者确认。`;
+    return;
+  }
+
+  els.aiAnalysisBtn.textContent = "AI 解读";
+  els.aiStatus.textContent = els.clientStory.value.trim()
+    ? "已记录来访者讲述，可以生成更具体的心理含义假设。"
+    : "建议先补充来访者讲述；如果直接解读，AI 会优先生成需要追问的问题。";
+}
+
+async function requestAiAnalysis() {
+  if (state.aiLoading) return;
+  if (!state.lastAnalysis || state.analysisDirty) {
+    runMicroAnalysis();
+  }
+
+  state.aiLoading = true;
+  updateAiStatus();
+
+  try {
+    const response = await fetch("/api/ai-analysis", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildPayload()),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || `HTTP ${response.status}`);
+    }
+
+    state.aiAnalysis = data.analysis;
+    state.aiGeneratedAt = data.generated_at || new Date().toISOString();
+    state.aiDirty = false;
+    renderAiAnalysis(state.aiAnalysis, data.model);
+    notify("AI 深度解读已生成");
+  } catch (error) {
+    renderAiError(error.message);
+    notify(error.message.includes("OPENAI_API_KEY") || error.message.includes("not configured") ? "请先在 Render 配置 OPENAI_API_KEY" : "AI 解读失败");
+  } finally {
+    state.aiLoading = false;
+    updateAiStatus();
+    saveDraft();
+  }
+}
+
+function renderAiAnalysis(ai, model) {
+  if (!ai) return;
+  const meaningCards = (ai.psychologicalMeanings || [])
+    .map(
+      (item) => `
+        <article class="ai-card">
+          <h4>${escapeHtml(item.theme)}</h4>
+          <p>${escapeHtml(item.possibleMeaning)}</p>
+          ${listBlock("证据", item.evidence)}
+          ${listBlock("可替代解释", item.alternativeMeanings)}
+          ${listBlock("如何验证", item.howToVerify)}
+        </article>
+      `,
+    )
+    .join("");
+
+  const symbolCards = (ai.symbolNarrative || [])
+    .map(
+      (item) => `
+        <article class="ai-card">
+          <h4>${escapeHtml(item.symbol)}</h4>
+          <p>${escapeHtml(item.observedRole)}</p>
+          <p class="meta-line">${escapeHtml(item.hypothesis)}</p>
+          <p class="meta-line">追问：${escapeHtml(item.question)}</p>
+        </article>
+      `,
+    )
+    .join("");
+
+  els.aiAnalysisOutput.innerHTML = `
+    <article class="ai-card">
+      <h4>综合理解</h4>
+      <p>${escapeHtml(ai.summary || "")}</p>
+      <p class="meta-line">可信度：${escapeHtml(ai.confidence || "中")}${model ? ` · 模型：${escapeHtml(model)}` : ""}</p>
+    </article>
+    ${meaningCards}
+    <article class="ai-card">
+      <h4>需要补充的信息</h4>
+      ${listHtml(ai.missingInformation)}
+    </article>
+    <article class="ai-card">
+      <h4>可以问来访者</h4>
+      ${listHtml(ai.questionsForClient)}
+    </article>
+    <article class="ai-card">
+      <h4>重要微缩物叙事</h4>
+      ${symbolCards || "<p>AI 暂未生成单个物件叙事。</p>"}
+    </article>
+    <article class="ai-card">
+      <h4>咨询师关注点</h4>
+      ${listHtml(ai.therapistFocus)}
+    </article>
+    <article class="ai-card">
+      <h4>边界与风险</h4>
+      ${listHtml(ai.riskAndLimits)}
+    </article>
+  `;
+}
+
+function renderAiError(message) {
+  els.aiAnalysisOutput.innerHTML = `
+    <article class="ai-card">
+      <h4>AI 解读暂不可用</h4>
+      <p>${escapeHtml(message)}</p>
+      <p class="meta-line">本地见微知著分析仍可继续使用；部署到 Render 后请配置 OPENAI_API_KEY。</p>
+    </article>
+  `;
+}
+
+function listBlock(title, items) {
+  return `<p class="meta-line">${title}</p>${listHtml(items)}`;
+}
+
+function listHtml(items) {
+  const safeItems = Array.isArray(items) && items.length ? items : ["暂无"];
+  return `<ul>${safeItems.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function renderEvidence() {
@@ -712,10 +892,15 @@ function newScene() {
   els.clientCode.value = "";
   els.sceneTitle.value = "";
   els.sessionAim.value = "";
+  els.clientStory.value = "";
   els.sessionNotes.value = "";
   state.lastAnalysis = null;
   state.lastAnalyzedAt = "";
   state.analysisDirty = false;
+  state.aiAnalysis = null;
+  state.aiGeneratedAt = "";
+  state.aiDirty = false;
+  els.aiAnalysisOutput.innerHTML = "";
   smoothSand();
   render();
 }
@@ -988,10 +1173,17 @@ function buildPayload() {
     client_code: els.clientCode.value.trim(),
     title: els.sceneTitle.value.trim(),
     aim: els.sessionAim.value.trim(),
+    client_story: els.clientStory.value.trim(),
     notes: els.sessionNotes.value.trim(),
-    scene: state.items.map((item) => ({ ...item, label: getSymbol(item.symbolId).label, category: getSymbol(item.symbolId).category })),
+    scene: state.items.map((item) => {
+      const symbol = getSymbol(item.symbolId);
+      return { ...item, label: symbol.label, category: symbol.category, role: symbol.role, tone: symbol.tone };
+    }),
     analysis: state.lastAnalysis
       ? { ...state.lastAnalysis, generated_at: state.lastAnalyzedAt, stale: state.analysisDirty }
+      : { status: "not_requested", stale: false },
+    ai_analysis: state.aiAnalysis
+      ? { ...state.aiAnalysis, generated_at: state.aiGeneratedAt, stale: state.aiDirty }
       : { status: "not_requested", stale: false },
   };
 }
@@ -1009,6 +1201,10 @@ function buildReport() {
 匿名编号：${payload.client_code || "未填写"}
 主题：${payload.title || "未填写"}
 目标：${payload.aim || "未填写"}
+
+## 来访者讲述
+
+${payload.client_story || "未填写"}
 
 ## 概览
 
@@ -1029,6 +1225,8 @@ ${analysis.themes.map((theme) => `- ${theme}`).join("\n")}
 
 ${analysis.prompts.map((prompt) => `- ${prompt}`).join("\n")}
 
+${formatAiReport(payload.ai_analysis)}
+
 ## 微缩物清单
 
 ${sceneRows || "- 暂无"}
@@ -1043,6 +1241,65 @@ ${payload.notes || "未填写"}
 `;
 }
 
+function formatAiReport(ai) {
+  if (!ai || ai.status === "not_requested") return "";
+  const meanings = (ai.psychologicalMeanings || [])
+    .map(
+      (item) => `### ${item.theme}
+
+可能含义：${item.possibleMeaning}
+
+证据：
+${markdownList(item.evidence)}
+
+可替代解释：
+${markdownList(item.alternativeMeanings)}
+
+如何验证：
+${markdownList(item.howToVerify)}`,
+    )
+    .join("\n\n");
+
+  const symbols = (ai.symbolNarrative || [])
+    .map((item) => `- ${item.symbol}：${item.observedRole}；假设：${item.hypothesis}；追问：${item.question}`)
+    .join("\n");
+
+  return `
+## AI 深度解读
+
+综合理解：${ai.summary || "未生成"}
+
+可信度：${ai.confidence || "未标注"}
+
+${meanings}
+
+### 重要微缩物叙事
+
+${symbols || "- 未生成"}
+
+### 需要补充的信息
+
+${markdownList(ai.missingInformation)}
+
+### 可以问来访者
+
+${markdownList(ai.questionsForClient)}
+
+### 咨询师关注点
+
+${markdownList(ai.therapistFocus)}
+
+### 边界与风险
+
+${markdownList(ai.riskAndLimits)}
+`;
+}
+
+function markdownList(items) {
+  const safeItems = Array.isArray(items) && items.length ? items : ["暂无"];
+  return safeItems.map((item) => `- ${item}`).join("\n");
+}
+
 function saveDraft() {
   const draft = {
     items: state.items,
@@ -1050,6 +1307,7 @@ function saveDraft() {
     clientCode: els.clientCode?.value || "",
     sceneTitle: els.sceneTitle?.value || "",
     sessionAim: els.sessionAim?.value || "",
+    clientStory: els.clientStory?.value || "",
     sessionNotes: els.sessionNotes?.value || "",
     rake: els.rakeCanvas?.toDataURL?.() || "",
   };
@@ -1066,6 +1324,7 @@ function restoreDraft() {
     els.clientCode.value = draft.clientCode || "";
     els.sceneTitle.value = draft.sceneTitle || "";
     els.sessionAim.value = draft.sessionAim || "";
+    els.clientStory.value = draft.clientStory || "";
     els.sessionNotes.value = draft.sessionNotes || "";
     if (draft.rake) {
       const image = new Image();

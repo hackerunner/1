@@ -158,6 +158,20 @@
             <ul id="promptList" class="plain-list"></ul>
           </section>
           <label class="notes-field">
+            <span>来访者讲述</span>
+            <textarea id="clientStory" rows="6" placeholder="尽量记录来访者原话：这个沙盘叫什么？每个重要物件是谁或是什么？最重要、最不舒服、最想移动的部分在哪里？"></textarea>
+          </label>
+          <section class="analysis-block ai-analysis-block">
+            <div class="analysis-block-head">
+              <h3>AI 深度解读</h3>
+              <button id="aiAnalysisBtn" class="secondary-action" type="button">AI 解读</button>
+            </div>
+            <div id="aiStatus" class="analysis-state compact">
+              先点击沙盘下方的“开始分析”，再补充来访者讲述，AI 会生成可验证的心理假设和追问。
+            </div>
+            <div id="aiAnalysisOutput" class="ai-output"></div>
+          </section>
+          <label class="notes-field">
             <span>咨询师记录</span>
             <textarea id="sessionNotes" rows="7" placeholder="记录语言、情绪、停顿、移动顺序与来访者解释"></textarea>
           </label>

@@ -640,6 +640,72 @@ textarea {
   font-size: 1rem;
 }
 
+.analysis-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.analysis-block-head h3 {
+  margin: 0;
+}
+
+.secondary-action {
+  min-height: 34px;
+  padding: 0 10px;
+  border-color: var(--blue);
+  color: var(--blue);
+  font-weight: 700;
+}
+
+.secondary-action:disabled {
+  cursor: wait;
+  opacity: 0.66;
+}
+
+.analysis-state.compact {
+  margin-top: 0;
+}
+
+.ai-output {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.ai-card {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fbfcfd;
+}
+
+.ai-card h4 {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+}
+
+.ai-card p {
+  margin: 0;
+  line-height: 1.58;
+}
+
+.ai-card ul {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding-left: 18px;
+  line-height: 1.55;
+}
+
+.ai-card .meta-line {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
 .plain-list {
   display: grid;
   gap: 8px;

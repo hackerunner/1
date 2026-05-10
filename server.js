@@ -7,6 +7,9 @@ const dataDir = process.env.DATA_DIR || process.env.RENDER_DISK_MOUNT_PATH || pa
 const sessionsFile = path.join(dataDir, "sessions.jsonl");
 const port = Number(process.env.PORT || 4175);
 const adminKey = process.env.ADMIN_KEY || "";
+const openaiApiKey = process.env.OPENAI_API_KEY || "";
+const openaiModel = process.env.OPENAI_MODEL || "gpt-5.4-mini";
+const openaiMaxOutputTokens = Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 2600);
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -33,6 +36,30 @@ const server = http.createServer(async (request, response) => {
       const record = sanitizeSession(payload, request);
       fs.appendFileSync(sessionsFile, `${JSON.stringify(record)}\n`, "utf8");
       sendJson(response, 200, { ok: true, savedAt: record.server_received_at });
+      return;
+    }
+
+    if (request.method === "GET" && url.pathname === "/api/ai-status") {
+      sendJson(response, 200, { enabled: Boolean(openaiApiKey), model: openaiModel });
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/ai-analysis") {
+      if (!openaiApiKey) {
+        sendJson(response, 501, {
+          error: "AI analysis is not configured. Set OPENAI_API_KEY on the server or in Render environment variables.",
+          code: "OPENAI_API_KEY_MISSING",
+        });
+        return;
+      }
+      const payload = JSON.parse(await readBody(request));
+      const analysis = await requestAiSandplayAnalysis(sanitizeAiPayload(payload));
+      sendJson(response, 200, {
+        ok: true,
+        model: openaiModel,
+        generated_at: new Date().toISOString(),
+        analysis,
+      });
       return;
     }
 
@@ -116,9 +143,11 @@ function sanitizeSession(payload, request) {
     client_code: String(payload.client_code || "").slice(0, 80),
     title: String(payload.title || "").slice(0, 120),
     aim: String(payload.aim || "").slice(0, 500),
+    client_story: String(payload.client_story || "").slice(0, 4000),
     notes: String(payload.notes || "").slice(0, 3000),
     scene: Array.isArray(payload.scene) ? payload.scene.slice(0, 200) : [],
     analysis: payload.analysis && typeof payload.analysis === "object" ? payload.analysis : {},
+    ai_analysis: payload.ai_analysis && typeof payload.ai_analysis === "object" ? payload.ai_analysis : {},
     client_user_agent: String(request.headers["user-agent"] || "").slice(0, 300),
     client_ip: normalizeIp(firstHeaderValue(request.headers["x-forwarded-for"]) || request.socket.remoteAddress || ""),
     server_received_at: new Date().toISOString(),
@@ -186,6 +215,7 @@ function flattenSession(record) {
     dominant_zone: analysis.dominantZone || "",
     density: analysis.density || "",
     themes: Array.isArray(analysis.themes) ? analysis.themes.join("; ") : "",
+    ai_summary: record.ai_analysis?.summary || "",
     notes: record.notes,
   };
 }
@@ -208,4 +238,155 @@ function normalizeIp(value) {
 
 function cryptoSafeId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function sanitizeAiPayload(payload) {
+  return {
+    title: String(payload.title || "").slice(0, 120),
+    aim: String(payload.aim || "").slice(0, 500),
+    client_story: String(payload.client_story || "").slice(0, 4000),
+    notes: String(payload.notes || "").slice(0, 3000),
+    scene: Array.isArray(payload.scene)
+      ? payload.scene.slice(0, 80).map((item) => ({
+          label: String(item.label || "").slice(0, 40),
+          category: String(item.category || "").slice(0, 40),
+          role: String(item.role || "").slice(0, 40),
+          tone: String(item.tone || "").slice(0, 80),
+          symbolId: String(item.symbolId || "").slice(0, 40),
+          x: Number(item.x || 0),
+          y: Number(item.y || 0),
+          scale: Number(item.scale || 1),
+          rotation: Number(item.rotation || 0),
+          addedAt: String(item.addedAt || "").slice(0, 40),
+        }))
+      : [],
+    analysis: payload.analysis && typeof payload.analysis === "object" ? payload.analysis : {},
+  };
+}
+
+async function requestAiSandplayAnalysis(payload) {
+  const apiResponse = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${openaiApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: openaiModel,
+      max_output_tokens: openaiMaxOutputTokens,
+      input: [
+        {
+          role: "system",
+          content:
+            "你是受训心理咨询师的沙盘治疗记录助手。请用中文输出。你的任务是根据沙盘结构、来访者叙述和咨询师记录，生成反思性心理假设、可验证证据和需要追问的问题。请给出3到6条心理含义假设、2到8条重要微缩物叙事、5到10个可问来访者的问题。不要诊断，不要声称确定来访者人格、创伤或疾病；所有解释都必须使用“可能、也许、可探索、需要来访者确认”等假设语言。若材料不足，明确说明缺失信息并给出追问。若出现自伤、伤人、急性危机线索，提示立即联系线下专业人员或当地紧急服务。",
+        },
+        {
+          role: "user",
+          content: `请分析以下沙盘资料，并严格返回 JSON。\n\n${JSON.stringify(payload, null, 2)}`,
+        },
+      ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "sandplay_ai_analysis",
+          strict: true,
+          schema: aiAnalysisSchema(),
+        },
+      },
+    }),
+  });
+
+  const data = await apiResponse.json().catch(() => ({}));
+  if (!apiResponse.ok) {
+    const message = data.error?.message || `OpenAI request failed with HTTP ${apiResponse.status}`;
+    throw new Error(message);
+  }
+
+  const text = extractOutputText(data);
+  if (!text) {
+    const refusal = extractRefusal(data);
+    if (refusal) throw new Error(refusal);
+    throw new Error("OpenAI returned an empty response");
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`AI response was not valid JSON: ${error.message}`);
+  }
+}
+
+function extractOutputText(data) {
+  if (typeof data.output_text === "string" && data.output_text.trim()) return data.output_text;
+  const chunks = [];
+  for (const output of data.output || []) {
+    for (const content of output.content || []) {
+      if (typeof content.text === "string") chunks.push(content.text);
+      if (typeof content.output_text === "string") chunks.push(content.output_text);
+    }
+  }
+  return chunks.join("").trim();
+}
+
+function extractRefusal(data) {
+  for (const output of data.output || []) {
+    for (const content of output.content || []) {
+      if (typeof content.refusal === "string") return content.refusal;
+    }
+  }
+  return "";
+}
+
+function aiAnalysisSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: [
+      "summary",
+      "psychologicalMeanings",
+      "symbolNarrative",
+      "missingInformation",
+      "questionsForClient",
+      "therapistFocus",
+      "riskAndLimits",
+      "confidence",
+    ],
+    properties: {
+      summary: { type: "string" },
+      psychologicalMeanings: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["theme", "evidence", "possibleMeaning", "alternativeMeanings", "howToVerify"],
+          properties: {
+            theme: { type: "string" },
+            evidence: { type: "array", items: { type: "string" } },
+            possibleMeaning: { type: "string" },
+            alternativeMeanings: { type: "array", items: { type: "string" } },
+            howToVerify: { type: "array", items: { type: "string" } },
+          },
+        },
+      },
+      symbolNarrative: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["symbol", "observedRole", "hypothesis", "question"],
+          properties: {
+            symbol: { type: "string" },
+            observedRole: { type: "string" },
+            hypothesis: { type: "string" },
+            question: { type: "string" },
+          },
+        },
+      },
+      missingInformation: { type: "array", items: { type: "string" } },
+      questionsForClient: { type: "array", items: { type: "string" } },
+      therapistFocus: { type: "array", items: { type: "string" } },
+      riskAndLimits: { type: "array", items: { type: "string" } },
+      confidence: { type: "string", enum: ["低", "中", "高"] },
+    },
+  };
 }

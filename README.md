@@ -23,10 +23,15 @@ npm start
    - Environment: `DATA_DIR=/var/data`
    - Disk: 挂载到 `/var/data`
 4. 如需限制导出接口，设置环境变量 `ADMIN_KEY`。
+5. 如需启用 AI 深度解读，在 Render 环境变量中设置：
+   - `OPENAI_API_KEY`：服务端调用 OpenAI API 的密钥，不要放到前端代码。
+   - `OPENAI_MODEL`：默认 `gpt-5.4-mini`，可按账号可用模型调整。
 
 ## 数据接口
 
 - `POST /api/sessions`：保存一次匿名沙盘记录。
+- `POST /api/ai-analysis`：基于沙盘结构、来访者讲述和咨询师记录生成 AI 深度解读。
+- `GET /api/ai-status`：查看当前服务端是否已配置 AI。
 - `GET /api/export.json?key=ADMIN_KEY`：导出全部记录。
 - `GET /api/export.csv?key=ADMIN_KEY`：导出 CSV。
 - `GET /api/count?key=ADMIN_KEY`：查看记录数。
