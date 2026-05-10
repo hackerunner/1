@@ -74,6 +74,7 @@ const state = {
 
 const els = {};
 let dragState = null;
+let shelfDragState = null;
 let rakeState = null;
 let rakeContext = null;
 
@@ -119,8 +120,6 @@ function bindEvents() {
   });
 
   els.tray.addEventListener("pointerdown", onTrayPointerDown);
-  els.tray.addEventListener("dragover", (event) => event.preventDefault());
-  els.tray.addEventListener("drop", onTrayDrop);
 
   document.getElementById("rotateLeftBtn").addEventListener("click", () => rotateSelected(-15));
   document.getElementById("rotateRightBtn").addEventListener("click", () => rotateSelected(15));
@@ -184,7 +183,7 @@ function renderShelf() {
     .map((symbol) => {
       const active = symbol.id === state.activeSymbol ? "active" : "";
       return `
-        <button class="symbol-button ${active}" type="button" draggable="true" data-symbol="${symbol.id}">
+        <button class="symbol-button ${active}" type="button" data-symbol="${symbol.id}">
           <span class="symbol-art">${symbolSvg(symbol)}</span>
           <span>
             <strong>${symbol.label}</strong>
@@ -201,10 +200,7 @@ function renderShelf() {
       setTool("place");
       renderShelf();
     });
-    button.addEventListener("dragstart", (event) => {
-      event.dataTransfer.setData("text/plain", button.dataset.symbol);
-      event.dataTransfer.effectAllowed = "copy";
-    });
+    button.addEventListener("pointerdown", onShelfPointerDown);
   });
 }
 
@@ -233,6 +229,7 @@ function renderItems() {
 
   els.sceneItems.querySelectorAll(".scene-item").forEach((node) => {
     node.addEventListener("pointerdown", onItemPointerDown);
+    node.addEventListener("dragstart", (event) => event.preventDefault());
     node.addEventListener("click", (event) => event.stopPropagation());
   });
 }
@@ -293,11 +290,64 @@ function onTrayPointerDown(event) {
   render();
 }
 
-function onTrayDrop(event) {
+function onShelfPointerDown(event) {
   event.preventDefault();
-  const symbolId = event.dataTransfer.getData("text/plain") || state.activeSymbol;
-  const point = trayPoint(event);
-  addItem(symbolId, point.x, point.y);
+  if (event.button !== 0) return;
+
+  const button = event.currentTarget;
+  const symbolId = button.dataset.symbol;
+  state.activeSymbol = symbolId;
+  setTool("place");
+
+  shelfDragState = {
+    symbolId,
+    button,
+    startX: event.clientX,
+    startY: event.clientY,
+    dragging: false,
+    preview: null,
+  };
+
+  button.setPointerCapture(event.pointerId);
+  window.addEventListener("pointermove", onShelfPointerMove);
+  window.addEventListener("pointerup", onShelfPointerUp, { once: true });
+}
+
+function onShelfPointerMove(event) {
+  if (!shelfDragState) return;
+  const moved = Math.hypot(event.clientX - shelfDragState.startX, event.clientY - shelfDragState.startY);
+
+  if (!shelfDragState.dragging && moved > 4) {
+    shelfDragState.dragging = true;
+    shelfDragState.preview = createDragPreview(getSymbol(shelfDragState.symbolId));
+    shelfDragState.button.classList.add("drag-origin");
+    document.body.classList.add("is-dragging-symbol");
+  }
+
+  if (shelfDragState.dragging) {
+    moveDragPreview(event);
+    els.tray.classList.toggle("tray-drop-ready", isPointInsideTray(event));
+  }
+}
+
+function onShelfPointerUp(event) {
+  window.removeEventListener("pointermove", onShelfPointerMove);
+  if (!shelfDragState) return;
+
+  const { dragging, symbolId, button } = shelfDragState;
+  const droppedOnTray = dragging && isPointInsideTray(event);
+
+  cleanupShelfDrag();
+  renderShelf();
+
+  if (droppedOnTray) {
+    const point = trayPoint(event);
+    addItem(symbolId, point.x, point.y);
+    return;
+  }
+
+  state.activeSymbol = symbolId;
+  setTool("place");
 }
 
 function onItemPointerDown(event) {
@@ -308,8 +358,11 @@ function onItemPointerDown(event) {
   pushHistory();
   const item = getItem(id);
   const rect = els.tray.getBoundingClientRect();
+  els.sceneItems.querySelectorAll(".scene-item").forEach((node) => node.classList.toggle("selected", node.dataset.id === id));
+  event.currentTarget.classList.add("dragging");
   dragState = {
     id,
+    node: event.currentTarget,
     startClientX: event.clientX,
     startClientY: event.clientY,
     startX: item.x,
@@ -320,7 +373,6 @@ function onItemPointerDown(event) {
   event.currentTarget.setPointerCapture(event.pointerId);
   window.addEventListener("pointermove", onItemPointerMove);
   window.addEventListener("pointerup", onItemPointerUp, { once: true });
-  render();
 }
 
 function onItemPointerMove(event) {
@@ -331,13 +383,52 @@ function onItemPointerMove(event) {
   const dy = ((event.clientY - dragState.startClientY) / dragState.rectHeight) * 100;
   item.x = clamp(dragState.startX + dx, 3, 97);
   item.y = clamp(dragState.startY + dy, 4, 96);
-  renderItems();
+  positionItemNode(dragState.node, item);
 }
 
 function onItemPointerUp() {
   window.removeEventListener("pointermove", onItemPointerMove);
+  dragState?.node?.classList.remove("dragging");
   dragState = null;
   render();
+}
+
+function positionItemNode(node, item) {
+  if (!node) return;
+  const size = 56 * item.scale;
+  node.style.left = `${item.x}%`;
+  node.style.top = `${item.y}%`;
+  node.style.width = `${size}px`;
+  node.style.height = `${size}px`;
+  node.style.marginLeft = `${-size / 2}px`;
+  node.style.marginTop = `${-size / 2}px`;
+  node.style.transform = `rotate(${item.rotation}deg)`;
+}
+
+function createDragPreview(symbol) {
+  const preview = document.createElement("div");
+  preview.className = "drag-preview";
+  preview.innerHTML = symbolSvg(symbol);
+  document.body.appendChild(preview);
+  return preview;
+}
+
+function moveDragPreview(event) {
+  if (!shelfDragState?.preview) return;
+  shelfDragState.preview.style.transform = `translate3d(${event.clientX - 28}px, ${event.clientY - 28}px, 0)`;
+}
+
+function cleanupShelfDrag() {
+  shelfDragState?.preview?.remove();
+  shelfDragState?.button?.classList.remove("drag-origin");
+  document.body.classList.remove("is-dragging-symbol");
+  els.tray.classList.remove("tray-drop-ready");
+  shelfDragState = null;
+}
+
+function isPointInsideTray(event) {
+  const rect = els.tray.getBoundingClientRect();
+  return event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
 }
 
 function beginRake(event, point) {

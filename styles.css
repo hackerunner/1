@@ -232,11 +232,17 @@ label span,
   padding: 6px 8px;
   text-align: left;
   background: #fbfcfc;
+  touch-action: none;
+  -webkit-user-drag: none;
 }
 
 .symbol-button.active {
   border-color: var(--teal);
   background: #edf7f4;
+}
+
+.symbol-button.drag-origin {
+  opacity: 0.55;
 }
 
 .symbol-art {
@@ -354,6 +360,14 @@ textarea {
   user-select: none;
 }
 
+.sand-tray.tray-drop-ready {
+  border-color: #277a73;
+  box-shadow:
+    inset 0 0 26px rgba(86, 52, 24, 0.36),
+    0 0 0 4px rgba(39, 122, 115, 0.18),
+    0 18px 38px rgba(34, 37, 42, 0.16);
+}
+
 .rake-canvas,
 .tray-grid,
 .scene-items {
@@ -422,6 +436,7 @@ textarea {
   background: rgba(255, 255, 255, 0.18);
   cursor: grab;
   touch-action: none;
+  -webkit-user-drag: none;
 }
 
 .scene-item:active {
@@ -434,10 +449,43 @@ textarea {
   box-shadow: 0 8px 16px rgba(32, 58, 81, 0.16);
 }
 
+.scene-item.dragging {
+  z-index: 8;
+  opacity: 0.94;
+  transition: none;
+}
+
 .scene-item svg {
   width: 46px;
   height: 46px;
   filter: drop-shadow(0 4px 4px rgba(75, 48, 24, 0.22));
+}
+
+.drag-preview {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 2px solid rgba(39, 122, 115, 0.35);
+  border-radius: 12px;
+  background: rgba(255, 247, 232, 0.72);
+  box-shadow: 0 12px 28px rgba(32, 44, 55, 0.18);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.drag-preview svg {
+  width: 46px;
+  height: 46px;
+  filter: drop-shadow(0 4px 4px rgba(75, 48, 24, 0.2));
+}
+
+.is-dragging-symbol {
+  cursor: grabbing;
 }
 
 .notice {
