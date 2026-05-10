@@ -1,0 +1,12 @@
+{
+  "name": "sandplay-analysis",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A web sandplay workspace for reflective psychological analysis and session export.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

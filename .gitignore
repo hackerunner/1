@@ -1,0 +1,5 @@
+data/
+*.log
+screenshot-*.png
+node_modules/
+.env

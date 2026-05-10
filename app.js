@@ -1,0 +1,886 @@
+const categories = [
+  { id: "figures", label: "人物" },
+  { id: "shelter", label: "容器" },
+  { id: "nature", label: "自然" },
+  { id: "boundary", label: "边界" },
+  { id: "energy", label: "能量" },
+  { id: "motion", label: "行动" },
+];
+
+const symbols = [
+  { id: "self", label: "自我", category: "figures", role: "core", tone: "身份", shape: "figure", color: "#315f88" },
+  { id: "child", label: "孩子", category: "figures", role: "vulnerable", tone: "需要", shape: "child", color: "#4d9b91" },
+  { id: "caregiver", label: "照料者", category: "figures", role: "relationship", tone: "支持", shape: "caregiver", color: "#6e4f82" },
+  { id: "observer", label: "旁观者", category: "figures", role: "distance", tone: "观看", shape: "observer", color: "#66727d" },
+  { id: "guardian", label: "守护动物", category: "figures", role: "protection", tone: "本能", shape: "animal", color: "#4f7f4d" },
+  { id: "wild", label: "野性动物", category: "figures", role: "instinct", tone: "冲动", shape: "animal", color: "#c65c45" },
+  { id: "house", label: "房屋", category: "shelter", role: "safety", tone: "安顿", shape: "house", color: "#277a73" },
+  { id: "tower", label: "高塔", category: "shelter", role: "control", tone: "视角", shape: "tower", color: "#315f88" },
+  { id: "tent", label: "帐篷", category: "shelter", role: "temporary", tone: "过渡", shape: "tent", color: "#a67839" },
+  { id: "gate", label: "门", category: "shelter", role: "threshold", tone: "进入", shape: "gate", color: "#6e4f82" },
+  { id: "tree", label: "树", category: "nature", role: "growth", tone: "生命力", shape: "tree", color: "#4f7f4d" },
+  { id: "mountain", label: "山", category: "nature", role: "obstacle", tone: "重量", shape: "mountain", color: "#66727d" },
+  { id: "water", label: "水域", category: "nature", role: "affect", tone: "情绪", shape: "water", color: "#315f88" },
+  { id: "fire", label: "火", category: "nature", role: "affect", tone: "能量", shape: "fire", color: "#c65c45" },
+  { id: "stone", label: "石头", category: "nature", role: "ground", tone: "沉稳", shape: "stone", color: "#6f6559" },
+  { id: "bridge", label: "桥", category: "boundary", role: "connection", tone: "连接", shape: "bridge", color: "#277a73" },
+  { id: "fence", label: "栅栏", category: "boundary", role: "boundary", tone: "保护", shape: "fence", color: "#6f6559" },
+  { id: "wall", label: "墙", category: "boundary", role: "boundary", tone: "隔离", shape: "wall", color: "#66727d" },
+  { id: "path", label: "道路", category: "boundary", role: "movement", tone: "路径", shape: "path", color: "#a67839" },
+  { id: "circle", label: "圆圈", category: "boundary", role: "container", tone: "完整", shape: "circle", color: "#6e4f82" },
+  { id: "light", label: "光", category: "energy", role: "resource", tone: "看见", shape: "light", color: "#d09a28" },
+  { id: "shadow", label: "阴影", category: "energy", role: "unspoken", tone: "未知", shape: "shadow", color: "#17202a" },
+  { id: "treasure", label: "宝物", category: "energy", role: "value", tone: "资源", shape: "treasure", color: "#d09a28" },
+  { id: "clock", label: "时钟", category: "energy", role: "time", tone: "节奏", shape: "clock", color: "#315f88" },
+  { id: "mirror", label: "镜子", category: "energy", role: "reflection", tone: "自省", shape: "mirror", color: "#4d9b91" },
+  { id: "boat", label: "船", category: "motion", role: "transition", tone: "穿越", shape: "boat", color: "#315f88" },
+  { id: "vehicle", label: "车", category: "motion", role: "agency", tone: "推进", shape: "vehicle", color: "#c65c45" },
+  { id: "ladder", label: "梯子", category: "motion", role: "ascent", tone: "上升", shape: "ladder", color: "#a67839" },
+  { id: "key", label: "钥匙", category: "motion", role: "access", tone: "开启", shape: "key", color: "#d09a28" },
+  { id: "spiral", label: "螺旋", category: "motion", role: "cycle", tone: "循环", shape: "spiral", color: "#6e4f82" },
+];
+
+const evidenceItems = [
+  {
+    title: "Roesler, C. (2019)",
+    meta: "Sandplay therapy: theory, applications and evidence base. The Arts in Psychotherapy.",
+    url: "https://doi.org/10.1016/j.aip.2019.04.001",
+  },
+  {
+    title: "Wiersma et al. (2022)",
+    meta: "A meta-analysis of sandplay therapy treatment outcomes. International Journal of Play Therapy.",
+    url: "https://doi.org/10.1037/pla0000180",
+  },
+  {
+    title: "Forty years review (2025)",
+    meta: "Systematic review with digital sandplay application insights. The Arts in Psychotherapy.",
+    url: "https://doi.org/10.1016/j.aip.2025.102311",
+  },
+  {
+    title: "Kalff / Lowenfeld tradition",
+    meta: "Safe and protected space, World Technique, symbolic expression and nonverbal process.",
+    url: "/RESEARCH_NOTES.md",
+  },
+];
+
+const state = {
+  activeCategory: "figures",
+  activeSymbol: "self",
+  tool: "select",
+  items: [],
+  selectedId: null,
+  history: [],
+};
+
+const els = {};
+let dragState = null;
+let rakeState = null;
+let rakeContext = null;
+
+document.addEventListener("DOMContentLoaded", () => {
+  cacheElements();
+  renderCategoryTabs();
+  renderShelf();
+  renderEvidence();
+  bindEvents();
+  resizeCanvas();
+  restoreDraft();
+  render();
+  showSafetyDialog();
+});
+
+function cacheElements() {
+  els.categoryTabs = document.getElementById("categoryTabs");
+  els.symbolShelf = document.getElementById("symbolShelf");
+  els.tray = document.getElementById("tray");
+  els.rakeCanvas = document.getElementById("rakeCanvas");
+  els.sceneItems = document.getElementById("sceneItems");
+  els.itemCount = document.getElementById("itemCount");
+  els.densityText = document.getElementById("densityText");
+  els.zoneText = document.getElementById("zoneText");
+  els.boundaryText = document.getElementById("boundaryText");
+  els.scoreBars = document.getElementById("scoreBars");
+  els.themeList = document.getElementById("themeList");
+  els.promptList = document.getElementById("promptList");
+  els.clientCode = document.getElementById("clientCode");
+  els.sceneTitle = document.getElementById("sceneTitle");
+  els.sessionAim = document.getElementById("sessionAim");
+  els.sessionNotes = document.getElementById("sessionNotes");
+  els.evidenceList = document.getElementById("evidenceList");
+  els.safetyDialog = document.getElementById("safetyDialog");
+  rakeContext = els.rakeCanvas.getContext("2d");
+}
+
+function bindEvents() {
+  window.addEventListener("resize", resizeCanvas);
+
+  document.querySelectorAll(".tool-button").forEach((button) => {
+    button.addEventListener("click", () => setTool(button.dataset.tool));
+  });
+
+  els.tray.addEventListener("pointerdown", onTrayPointerDown);
+  els.tray.addEventListener("dragover", (event) => event.preventDefault());
+  els.tray.addEventListener("drop", onTrayDrop);
+
+  document.getElementById("rotateLeftBtn").addEventListener("click", () => rotateSelected(-15));
+  document.getElementById("rotateRightBtn").addEventListener("click", () => rotateSelected(15));
+  document.getElementById("smallerBtn").addEventListener("click", () => scaleSelected(-0.1));
+  document.getElementById("largerBtn").addEventListener("click", () => scaleSelected(0.1));
+  document.getElementById("duplicateBtn").addEventListener("click", duplicateSelected);
+  document.getElementById("deleteBtn").addEventListener("click", deleteSelected);
+  document.getElementById("smoothBtn").addEventListener("click", smoothSand);
+  document.getElementById("randomSeedBtn").addEventListener("click", seedScene);
+  document.getElementById("newSceneBtn").addEventListener("click", newScene);
+  document.getElementById("saveLocalBtn").addEventListener("click", saveLocalSession);
+  document.getElementById("saveServerBtn").addEventListener("click", saveServerSession);
+  document.getElementById("exportBtn").addEventListener("click", exportReport);
+  document.getElementById("copyReportBtn").addEventListener("click", copyReport);
+
+  [els.clientCode, els.sceneTitle, els.sessionAim, els.sessionNotes].forEach((input) => {
+    input.addEventListener("input", saveDraft);
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Delete" || event.key === "Backspace") {
+      if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") return;
+      deleteSelected();
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+      undo();
+    }
+  });
+}
+
+function showSafetyDialog() {
+  if (localStorage.getItem("mindsand-safety-ack") === "yes") return;
+  if (typeof els.safetyDialog.showModal === "function") {
+    els.safetyDialog.showModal();
+    els.safetyDialog.addEventListener("close", () => localStorage.setItem("mindsand-safety-ack", "yes"), { once: true });
+  }
+}
+
+function renderCategoryTabs() {
+  els.categoryTabs.innerHTML = categories
+    .map(
+      (category) =>
+        `<button type="button" class="${category.id === state.activeCategory ? "active" : ""}" data-category="${category.id}">${category.label}</button>`,
+    )
+    .join("");
+
+  els.categoryTabs.querySelectorAll("button").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.activeCategory = button.dataset.category;
+      const firstSymbol = symbols.find((symbol) => symbol.category === state.activeCategory);
+      if (firstSymbol) state.activeSymbol = firstSymbol.id;
+      renderCategoryTabs();
+      renderShelf();
+    });
+  });
+}
+
+function renderShelf() {
+  const visible = symbols.filter((symbol) => symbol.category === state.activeCategory);
+  els.symbolShelf.innerHTML = visible
+    .map((symbol) => {
+      const active = symbol.id === state.activeSymbol ? "active" : "";
+      return `
+        <button class="symbol-button ${active}" type="button" draggable="true" data-symbol="${symbol.id}">
+          <span class="symbol-art">${symbolSvg(symbol)}</span>
+          <span>
+            <strong>${symbol.label}</strong>
+            <small>${symbol.tone}</small>
+          </span>
+        </button>
+      `;
+    })
+    .join("");
+
+  els.symbolShelf.querySelectorAll(".symbol-button").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.activeSymbol = button.dataset.symbol;
+      setTool("place");
+      renderShelf();
+    });
+    button.addEventListener("dragstart", (event) => {
+      event.dataTransfer.setData("text/plain", button.dataset.symbol);
+      event.dataTransfer.effectAllowed = "copy";
+    });
+  });
+}
+
+function render() {
+  renderItems();
+  const analysis = analyzeScene();
+  renderAnalysis(analysis);
+  saveDraft();
+}
+
+function renderItems() {
+  els.sceneItems.innerHTML = state.items
+    .map((item) => {
+      const symbol = getSymbol(item.symbolId);
+      const selected = item.id === state.selectedId ? "selected" : "";
+      const size = 56 * item.scale;
+      return `
+        <button class="scene-item ${selected}" data-id="${item.id}" type="button"
+          style="left:${item.x}%;top:${item.y}%;width:${size}px;height:${size}px;margin-left:${-size / 2}px;margin-top:${-size / 2}px;transform:rotate(${item.rotation}deg)"
+          title="${symbol.label}">
+          ${symbolSvg(symbol)}
+        </button>
+      `;
+    })
+    .join("");
+
+  els.sceneItems.querySelectorAll(".scene-item").forEach((node) => {
+    node.addEventListener("pointerdown", onItemPointerDown);
+    node.addEventListener("click", (event) => event.stopPropagation());
+  });
+}
+
+function renderAnalysis(analysis) {
+  els.itemCount.textContent = analysis.itemCount;
+  els.densityText.textContent = analysis.density;
+  els.zoneText.textContent = analysis.dominantZone;
+  els.boundaryText.textContent = analysis.boundaryCount;
+  els.scoreBars.innerHTML = analysis.scores
+    .map(
+      (score) => `
+        <div class="score-row">
+          <span>${score.label}</span>
+          <div class="score-track"><div class="score-fill" style="width:${score.value}%"></div></div>
+          <strong>${score.value}</strong>
+        </div>
+      `,
+    )
+    .join("");
+  els.themeList.innerHTML = analysis.themes.map((theme) => `<li>${theme}</li>`).join("");
+  els.promptList.innerHTML = analysis.prompts.map((prompt) => `<li>${prompt}</li>`).join("");
+}
+
+function renderEvidence() {
+  els.evidenceList.innerHTML = evidenceItems
+    .map(
+      (item) => `
+        <a class="evidence-item" href="${item.url}" target="${item.url.startsWith("http") ? "_blank" : "_self"}" rel="noreferrer">
+          <strong>${item.title}</strong>
+          <small>${item.meta}</small>
+        </a>
+      `,
+    )
+    .join("");
+}
+
+function setTool(tool) {
+  state.tool = tool;
+  document.querySelectorAll(".tool-button").forEach((button) => button.classList.toggle("active", button.dataset.tool === tool));
+}
+
+function onTrayPointerDown(event) {
+  if (event.target.closest(".scene-item")) return;
+  const point = trayPoint(event);
+  state.selectedId = null;
+
+  if (state.tool === "place") {
+    addItem(state.activeSymbol, point.x, point.y);
+    return;
+  }
+
+  if (state.tool === "rake") {
+    beginRake(event, point);
+    return;
+  }
+
+  render();
+}
+
+function onTrayDrop(event) {
+  event.preventDefault();
+  const symbolId = event.dataTransfer.getData("text/plain") || state.activeSymbol;
+  const point = trayPoint(event);
+  addItem(symbolId, point.x, point.y);
+}
+
+function onItemPointerDown(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  const id = event.currentTarget.dataset.id;
+  state.selectedId = id;
+  pushHistory();
+  const item = getItem(id);
+  const rect = els.tray.getBoundingClientRect();
+  dragState = {
+    id,
+    startClientX: event.clientX,
+    startClientY: event.clientY,
+    startX: item.x,
+    startY: item.y,
+    rectWidth: rect.width,
+    rectHeight: rect.height,
+  };
+  event.currentTarget.setPointerCapture(event.pointerId);
+  window.addEventListener("pointermove", onItemPointerMove);
+  window.addEventListener("pointerup", onItemPointerUp, { once: true });
+  render();
+}
+
+function onItemPointerMove(event) {
+  if (!dragState) return;
+  const item = getItem(dragState.id);
+  if (!item) return;
+  const dx = ((event.clientX - dragState.startClientX) / dragState.rectWidth) * 100;
+  const dy = ((event.clientY - dragState.startClientY) / dragState.rectHeight) * 100;
+  item.x = clamp(dragState.startX + dx, 3, 97);
+  item.y = clamp(dragState.startY + dy, 4, 96);
+  renderItems();
+}
+
+function onItemPointerUp() {
+  window.removeEventListener("pointermove", onItemPointerMove);
+  dragState = null;
+  render();
+}
+
+function beginRake(event, point) {
+  rakeState = { last: point };
+  els.tray.setPointerCapture(event.pointerId);
+  window.addEventListener("pointermove", drawRake);
+  window.addEventListener("pointerup", endRake, { once: true });
+}
+
+function drawRake(event) {
+  if (!rakeState) return;
+  const point = trayPoint(event);
+  const from = toCanvasPoint(rakeState.last);
+  const to = toCanvasPoint(point);
+  rakeContext.save();
+  rakeContext.strokeStyle = "rgba(101, 73, 38, 0.34)";
+  rakeContext.lineWidth = 3;
+  rakeContext.lineCap = "round";
+  rakeContext.beginPath();
+  rakeContext.moveTo(from.x, from.y);
+  rakeContext.lineTo(to.x, to.y);
+  rakeContext.stroke();
+  rakeContext.restore();
+  rakeState.last = point;
+}
+
+function endRake() {
+  window.removeEventListener("pointermove", drawRake);
+  rakeState = null;
+  saveDraft();
+}
+
+function addItem(symbolId, x, y) {
+  const symbol = getSymbol(symbolId);
+  pushHistory();
+  const item = {
+    id: `item-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    symbolId: symbol.id,
+    x: clamp(x, 3, 97),
+    y: clamp(y, 4, 96),
+    scale: 1,
+    rotation: Math.round((Math.random() * 18 - 9) / 3) * 3,
+    addedAt: new Date().toISOString(),
+  };
+  state.items.push(item);
+  state.selectedId = item.id;
+  setTool("select");
+  render();
+}
+
+function rotateSelected(delta) {
+  const item = selectedItem();
+  if (!item) return;
+  pushHistory();
+  item.rotation = normalizeAngle(item.rotation + delta);
+  render();
+}
+
+function scaleSelected(delta) {
+  const item = selectedItem();
+  if (!item) return;
+  pushHistory();
+  item.scale = clamp(Number((item.scale + delta).toFixed(2)), 0.65, 1.75);
+  render();
+}
+
+function duplicateSelected() {
+  const item = selectedItem();
+  if (!item) return;
+  pushHistory();
+  const duplicate = {
+    ...item,
+    id: `item-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    x: clamp(item.x + 6, 3, 97),
+    y: clamp(item.y + 5, 4, 96),
+    addedAt: new Date().toISOString(),
+  };
+  state.items.push(duplicate);
+  state.selectedId = duplicate.id;
+  render();
+}
+
+function deleteSelected() {
+  if (!state.selectedId) return;
+  pushHistory();
+  state.items = state.items.filter((item) => item.id !== state.selectedId);
+  state.selectedId = null;
+  render();
+}
+
+function smoothSand() {
+  rakeContext.clearRect(0, 0, els.rakeCanvas.width, els.rakeCanvas.height);
+  saveDraft();
+}
+
+function seedScene() {
+  pushHistory();
+  smoothSand();
+  const starter = [
+    ["self", 50, 54],
+    ["house", 28, 38],
+    ["bridge", 47, 42],
+    ["water", 72, 62],
+    ["tree", 63, 31],
+    ["wall", 36, 68],
+  ];
+  state.items = starter.map(([symbolId, x, y], index) => ({
+    id: `seed-${Date.now().toString(36)}-${index}`,
+    symbolId,
+    x,
+    y,
+    scale: symbolId === "water" ? 1.35 : 1,
+    rotation: symbolId === "bridge" ? -8 : 0,
+    addedAt: new Date().toISOString(),
+  }));
+  state.selectedId = null;
+  render();
+}
+
+function newScene() {
+  if (state.items.length && !window.confirm("清空当前沙盘？")) return;
+  pushHistory();
+  state.items = [];
+  state.selectedId = null;
+  els.clientCode.value = "";
+  els.sceneTitle.value = "";
+  els.sessionAim.value = "";
+  els.sessionNotes.value = "";
+  smoothSand();
+  render();
+}
+
+function undo() {
+  const snapshot = state.history.pop();
+  if (!snapshot) return;
+  const parsed = JSON.parse(snapshot);
+  state.items = parsed.items;
+  state.selectedId = parsed.selectedId;
+  render();
+}
+
+function analyzeScene() {
+  const items = state.items.map((item) => ({ ...item, symbol: getSymbol(item.symbolId) }));
+  const itemCount = items.length;
+  const categoryCounts = {};
+  const roleCounts = {};
+  const zoneCounts = {};
+
+  items.forEach((item) => {
+    categoryCounts[item.symbol.category] = (categoryCounts[item.symbol.category] || 0) + 1;
+    roleCounts[item.symbol.role] = (roleCounts[item.symbol.role] || 0) + 1;
+    const zone = zoneOf(item);
+    zoneCounts[zone] = (zoneCounts[zone] || 0) + 1;
+  });
+
+  const centerItems = items.filter((item) => distance(item, { x: 50, y: 50 }) < 18);
+  const perimeterItems = items.filter((item) => item.x < 16 || item.x > 84 || item.y < 16 || item.y > 84);
+  const boundaryCount = (roleCounts.boundary || 0) + (roleCounts.container || 0);
+  const connectionCount = (roleCounts.connection || 0) + (roleCounts.movement || 0) + (roleCounts.threshold || 0);
+  const affectCount = (roleCounts.affect || 0) + (roleCounts.unspoken || 0);
+  const supportCount = (roleCounts.safety || 0) + (roleCounts.protection || 0) + (roleCounts.resource || 0);
+  const isolatedItems = isolatedSymbols(items);
+  const dominantZone = dominant(zoneCounts) || "无";
+  const density = densityLabel(itemCount);
+
+  const themes = [];
+  const prompts = [];
+
+  if (!itemCount) {
+    themes.push("沙盘尚为空，当前更像一个等待表达的容器。");
+    prompts.push("先从一个最能代表当前状态的物件开始，再观察它需要靠近或远离什么。");
+  } else {
+    themes.push(`当前共有 ${itemCount} 个微缩物，空间密度为“${density}”，主区域为“${dominantZone}”。`);
+
+    if (centerItems.length) {
+      themes.push(`中心区出现 ${centerItems.map((item) => item.symbol.label).join("、")}，可作为当前自我关注或核心议题的线索。`);
+      prompts.push("中心物件像是在保护、表达、等待，还是阻挡？");
+    } else {
+      themes.push("中心区保持留白，可能提示主题仍在形成，或重要内容被放在关系/边缘位置。");
+      prompts.push("如果中心必须出现一个物件，它会是什么？");
+    }
+
+    if (boundaryCount >= 2) {
+      themes.push("边界与容器元素较明显，可关注保护、隔离、控制感和安全距离。");
+      prompts.push("哪些对象被边界保护，哪些对象被边界隔开？");
+    }
+
+    if (connectionCount >= 2) {
+      themes.push("道路、桥、门或行动元素较多，沙盘里存在转变、通达或重新连接的主题。");
+      prompts.push("哪一条路径最想被走通，走通后会发生什么？");
+    }
+
+    if (affectCount) {
+      themes.push("水、火、阴影等情绪能量元素出现，适合追问情绪的强度、可控性与命名方式。");
+      prompts.push("这些能量是被承接、被隐藏，还是正在扩散？");
+    }
+
+    if (perimeterItems.length > itemCount * 0.45) {
+      themes.push("大量物件靠近边缘，可能反映谨慎、探索边界或把重要内容保持在安全距离。");
+      prompts.push("边缘物件若向中心移动一步，会变得更安全还是更危险？");
+    }
+
+    if (isolatedItems.length) {
+      themes.push(`${isolatedItems.map((item) => item.symbol.label).join("、")} 与其他物件距离较远，可作为孤立感或独立资源的观察点。`);
+      prompts.push("最孤立的物件希望被谁看见，或希望继续保持距离？");
+    }
+
+    if ((categoryCounts.figures || 0) >= 3 && (categoryCounts.boundary || 0) >= 1) {
+      themes.push("人物与边界同时突出，关系位置、角色分工和亲近距离可能是重点。");
+    }
+
+    prompts.push("请来访者为这个场景取一个标题，再讲述开始、冲突与下一步。");
+    prompts.push("以移动顺序为线索记录：先放下的物件通常承载更直接的主题。");
+  }
+
+  themes.push("所有解释都应回到来访者自己的命名、故事和情绪体验，而不是由系统直接下结论。");
+
+  const scores = [
+    { label: "自我", value: score((roleCounts.core || 0) * 24 + centerItems.length * 12 + (categoryCounts.figures || 0) * 5) },
+    { label: "关系", value: score((roleCounts.relationship || 0) * 22 + connectionCount * 12 + (categoryCounts.figures || 0) * 5) },
+    { label: "保护", value: score(boundaryCount * 18 + supportCount * 13 + (roleCounts.control || 0) * 10) },
+    { label: "行动", value: score(connectionCount * 18 + (categoryCounts.motion || 0) * 14 + zoneRight(items) * 6) },
+    { label: "情绪", value: score(affectCount * 20 + (roleCounts.vulnerable || 0) * 13 + (roleCounts.instinct || 0) * 10) },
+  ];
+
+  return {
+    itemCount,
+    density,
+    dominantZone,
+    boundaryCount,
+    categoryCounts,
+    roleCounts,
+    zoneCounts,
+    themes,
+    prompts,
+    scores,
+  };
+}
+
+function saveLocalSession() {
+  const payload = buildPayload();
+  const sessions = JSON.parse(localStorage.getItem("mindsand-sessions") || "[]");
+  sessions.push(payload);
+  localStorage.setItem("mindsand-sessions", JSON.stringify(sessions.slice(-100)));
+  notify("已保存到本地浏览器");
+}
+
+async function saveServerSession() {
+  const payload = buildPayload();
+  try {
+    const response = await fetch("/api/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    notify("已保存到服务器");
+  } catch (error) {
+    notify(`服务器保存失败：${error.message}`);
+  }
+}
+
+function exportReport() {
+  const report = buildReport();
+  const blob = new Blob([report], { type: "text/markdown;charset=utf-8" });
+  const anchor = document.createElement("a");
+  anchor.href = URL.createObjectURL(blob);
+  anchor.download = `mindsand-report-${new Date().toISOString().slice(0, 10)}.md`;
+  anchor.click();
+  URL.revokeObjectURL(anchor.href);
+}
+
+async function copyReport() {
+  try {
+    await navigator.clipboard.writeText(buildReport());
+    notify("报告已复制");
+  } catch {
+    notify("复制失败，请使用导出报告");
+  }
+}
+
+function buildPayload() {
+  return {
+    id: `session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    created_at: new Date().toISOString(),
+    client_code: els.clientCode.value.trim(),
+    title: els.sceneTitle.value.trim(),
+    aim: els.sessionAim.value.trim(),
+    notes: els.sessionNotes.value.trim(),
+    scene: state.items.map((item) => ({ ...item, label: getSymbol(item.symbolId).label, category: getSymbol(item.symbolId).category })),
+    analysis: analyzeScene(),
+  };
+}
+
+function buildReport() {
+  const payload = buildPayload();
+  const analysis = payload.analysis;
+  const sceneRows = payload.scene
+    .map((item) => `- ${item.label}：${item.category}，x=${item.x.toFixed(1)}，y=${item.y.toFixed(1)}，scale=${item.scale}`)
+    .join("\n");
+  return `# MindSand 沙盘分析报告
+
+生成时间：${new Date().toLocaleString()}
+匿名编号：${payload.client_code || "未填写"}
+主题：${payload.title || "未填写"}
+目标：${payload.aim || "未填写"}
+
+## 概览
+
+- 微缩物数量：${analysis.itemCount}
+- 空间密度：${analysis.density}
+- 主区域：${analysis.dominantZone}
+- 边界物数量：${analysis.boundaryCount}
+
+## 主题线索
+
+${analysis.themes.map((theme) => `- ${theme}`).join("\n")}
+
+## 观察提示
+
+${analysis.prompts.map((prompt) => `- ${prompt}`).join("\n")}
+
+## 微缩物清单
+
+${sceneRows || "- 暂无"}
+
+## 咨询师记录
+
+${payload.notes || "未填写"}
+
+## 使用边界
+
+本报告仅用于心理教育、咨询记录与自我反思；不能替代临床诊断、治疗或危机干预。解释应以当事人的叙事、情绪、文化背景和咨询关系为准。
+`;
+}
+
+function saveDraft() {
+  const draft = {
+    items: state.items,
+    selectedId: state.selectedId,
+    clientCode: els.clientCode?.value || "",
+    sceneTitle: els.sceneTitle?.value || "",
+    sessionAim: els.sessionAim?.value || "",
+    sessionNotes: els.sessionNotes?.value || "",
+    rake: els.rakeCanvas?.toDataURL?.() || "",
+  };
+  localStorage.setItem("mindsand-draft", JSON.stringify(draft));
+}
+
+function restoreDraft() {
+  const raw = localStorage.getItem("mindsand-draft");
+  if (!raw) return;
+  try {
+    const draft = JSON.parse(raw);
+    state.items = Array.isArray(draft.items) ? draft.items : [];
+    state.selectedId = draft.selectedId || null;
+    els.clientCode.value = draft.clientCode || "";
+    els.sceneTitle.value = draft.sceneTitle || "";
+    els.sessionAim.value = draft.sessionAim || "";
+    els.sessionNotes.value = draft.sessionNotes || "";
+    if (draft.rake) {
+      const image = new Image();
+      image.onload = () => rakeContext.drawImage(image, 0, 0, els.rakeCanvas.width, els.rakeCanvas.height);
+      image.src = draft.rake;
+    }
+  } catch {
+    localStorage.removeItem("mindsand-draft");
+  }
+}
+
+function pushHistory() {
+  state.history.push(JSON.stringify({ items: state.items, selectedId: state.selectedId }));
+  state.history = state.history.slice(-40);
+}
+
+function resizeCanvas() {
+  const rect = els.rakeCanvas.getBoundingClientRect();
+  const previous = document.createElement("canvas");
+  previous.width = els.rakeCanvas.width || 1;
+  previous.height = els.rakeCanvas.height || 1;
+  previous.getContext("2d").drawImage(els.rakeCanvas, 0, 0);
+  els.rakeCanvas.width = Math.max(1, Math.round(rect.width * window.devicePixelRatio));
+  els.rakeCanvas.height = Math.max(1, Math.round(rect.height * window.devicePixelRatio));
+  rakeContext.setTransform(window.devicePixelRatio, 0, 0, window.devicePixelRatio, 0, 0);
+  if (previous.width > 1) {
+    rakeContext.drawImage(previous, 0, 0, rect.width, rect.height);
+  }
+}
+
+function trayPoint(event) {
+  const rect = els.tray.getBoundingClientRect();
+  return {
+    x: clamp(((event.clientX - rect.left) / rect.width) * 100, 0, 100),
+    y: clamp(((event.clientY - rect.top) / rect.height) * 100, 0, 100),
+  };
+}
+
+function toCanvasPoint(point) {
+  const rect = els.rakeCanvas.getBoundingClientRect();
+  return {
+    x: (point.x / 100) * rect.width,
+    y: (point.y / 100) * rect.height,
+  };
+}
+
+function getSymbol(id) {
+  return symbols.find((symbol) => symbol.id === id) || symbols[0];
+}
+
+function getItem(id) {
+  return state.items.find((item) => item.id === id);
+}
+
+function selectedItem() {
+  return state.selectedId ? getItem(state.selectedId) : null;
+}
+
+function zoneOf(item) {
+  if (distance(item, { x: 50, y: 50 }) < 18) return "中心";
+  if (item.x < 50 && item.y < 50) return "左上";
+  if (item.x >= 50 && item.y < 50) return "右上";
+  if (item.x < 50 && item.y >= 50) return "左下";
+  return "右下";
+}
+
+function dominant(counts) {
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+}
+
+function densityLabel(count) {
+  if (count === 0) return "空";
+  if (count <= 6) return "低";
+  if (count <= 16) return "中";
+  return "高";
+}
+
+function isolatedSymbols(items) {
+  if (items.length < 3) return [];
+  return items.filter((item) => {
+    const nearest = Math.min(...items.filter((other) => other.id !== item.id).map((other) => distance(item, other)));
+    return nearest > 28;
+  });
+}
+
+function zoneRight(items) {
+  return items.filter((item) => item.x > 62).length;
+}
+
+function distance(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function score(value) {
+  return Math.round(clamp(value, 0, 100));
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function normalizeAngle(value) {
+  let angle = value % 360;
+  if (angle < 0) angle += 360;
+  return angle;
+}
+
+function notify(message) {
+  let toast = document.querySelector(".toast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.className = "toast";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.classList.add("show");
+  window.clearTimeout(toast.timer);
+  toast.timer = window.setTimeout(() => toast.classList.remove("show"), 2400);
+}
+
+function symbolSvg(symbol) {
+  const c = symbol.color;
+  const dark = "#25313c";
+  const pale = "#fff7e8";
+  switch (symbol.shape) {
+    case "figure":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="13" r="7" fill="${c}"/><path d="M14 40c1-10 5-17 10-17s9 7 10 17z" fill="${c}"/><path d="M17 28h14" stroke="${pale}" stroke-width="2"/></svg>`;
+    case "child":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="15" r="6" fill="${c}"/><path d="M17 39c1-8 4-14 7-14s6 6 7 14z" fill="${c}"/><path d="M14 30c7 5 13 5 20 0" stroke="${dark}" stroke-width="2" fill="none"/></svg>`;
+    case "caregiver":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="19" cy="15" r="6" fill="${c}"/><circle cx="30" cy="18" r="5" fill="#4d9b91"/><path d="M11 40c2-9 6-15 11-15 4 0 8 4 10 11 2-4 4-6 6-7" fill="${c}" opacity=".85"/></svg>`;
+    case "observer":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M6 24s7-11 18-11 18 11 18 11-7 11-18 11S6 24 6 24z" fill="${pale}" stroke="${c}" stroke-width="3"/><circle cx="24" cy="24" r="6" fill="${c}"/></svg>`;
+    case "animal":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M11 29c2-9 10-13 19-10 5 1 8 4 10 9-4 1-7 4-8 8H16c-1-3-3-5-5-7z" fill="${c}"/><path d="M31 18l5-7 2 9M17 30l-5 8M31 30l6 8" stroke="${dark}" stroke-width="3"/></svg>`;
+    case "house":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M7 23 24 9l17 14v17H12V23z" fill="${c}"/><path d="M20 40V28h8v12" fill="${pale}"/><path d="M7 23 24 9l17 14" stroke="${dark}" stroke-width="3" fill="none"/></svg>`;
+    case "tower":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M15 40V14h18v26z" fill="${c}"/><path d="M13 14V8h5v6m5 0V8h5v6m5 0V8h3v6" stroke="${dark}" stroke-width="3"/><path d="M21 40V28h6v12M20 21h8" stroke="${pale}" stroke-width="2"/></svg>`;
+    case "tent":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M7 40 24 9l17 31z" fill="${c}"/><path d="M24 9v31M16 40l8-13 8 13" stroke="${pale}" stroke-width="2" fill="none"/></svg>`;
+    case "gate":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M11 40V18a13 13 0 0 1 26 0v22h-8V19a5 5 0 0 0-10 0v21z" fill="${c}"/><path d="M15 28h18" stroke="${pale}" stroke-width="2"/></svg>`;
+    case "tree":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M22 25h5v16h-5z" fill="#6f4b2e"/><circle cx="24" cy="17" r="10" fill="${c}"/><circle cx="15" cy="24" r="8" fill="${c}"/><circle cx="33" cy="24" r="8" fill="${c}"/></svg>`;
+    case "mountain":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M5 40 18 15l8 13 5-8 12 20z" fill="${c}"/><path d="m18 15 5 8 3-5M31 20l4 8" stroke="${pale}" stroke-width="2"/></svg>`;
+    case "water":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M6 29c5-6 10 6 15 0s10 6 15 0 6-3 6-3v12H6z" fill="${c}"/><path d="M7 20c5-5 9 5 14 0s9 5 14 0" stroke="${c}" stroke-width="4" fill="none"/></svg>`;
+    case "fire":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 42c-9-3-13-9-10-17 2-5 7-8 7-16 7 5 4 12 10 15 4 2 5 11-7 18z" fill="${c}"/><path d="M24 38c-4-2-6-5-4-9 1-3 4-5 4-9 4 4 7 11 0 18z" fill="#f4c04f"/></svg>`;
+    case "stone":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M9 36c0-12 8-24 18-23 8 1 13 9 12 18-2 8-10 11-19 11-6 0-11-1-11-6z" fill="${c}"/><path d="M17 25h15" stroke="${pale}" stroke-width="2" opacity=".5"/></svg>`;
+    case "bridge":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M6 34c7-17 29-17 36 0" stroke="${c}" stroke-width="7" fill="none"/><path d="M8 34h32M15 30v7M24 27v10M33 30v7" stroke="${dark}" stroke-width="2"/></svg>`;
+    case "fence":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 18h32M8 31h32" stroke="${c}" stroke-width="5"/><path d="M12 10v30M22 10v30M32 10v30" stroke="${dark}" stroke-width="4"/></svg>`;
+    case "wall":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 14h32v24H8z" fill="${c}"/><path d="M8 22h32M8 30h32M18 14v8M30 14v8M14 22v8M26 22v8M38 22v8M20 30v8M32 30v8" stroke="${pale}" stroke-width="2" opacity=".65"/></svg>`;
+    case "path":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M15 42c10-8 15-15 8-36M28 42c-4-12 2-18 8-28" stroke="${c}" stroke-width="7" fill="none"/></svg>`;
+    case "circle":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="16" fill="none" stroke="${c}" stroke-width="7"/><circle cx="24" cy="24" r="5" fill="${c}"/></svg>`;
+    case "light":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="8" fill="${c}"/><path d="M24 4v8M24 36v8M4 24h8M36 24h8M10 10l6 6M32 32l6 6M38 10l-6 6M16 32l-6 6" stroke="${c}" stroke-width="4"/></svg>`;
+    case "shadow":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M38 34c-13 8-29-1-29-16 0-4 1-8 4-12-1 12 8 24 25 28z" fill="${c}"/></svg>`;
+    case "treasure":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M9 22h30v18H9z" fill="${c}"/><path d="M12 22c2-9 22-9 24 0M9 29h30M24 22v18" stroke="${dark}" stroke-width="3"/><circle cx="24" cy="31" r="3" fill="${pale}"/></svg>`;
+    case "clock":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="17" fill="${pale}" stroke="${c}" stroke-width="5"/><path d="M24 14v11l8 5" stroke="${dark}" stroke-width="3"/></svg>`;
+    case "mirror":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><ellipse cx="24" cy="19" rx="12" ry="15" fill="${pale}" stroke="${c}" stroke-width="5"/><path d="M24 34v8M17 42h14M19 18c4-5 9-6 14-4" stroke="${c}" stroke-width="2"/></svg>`;
+    case "boat":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 29h32c-4 9-9 12-16 12S12 38 8 29z" fill="${c}"/><path d="M24 29V8l12 16H24z" fill="${pale}" stroke="${dark}" stroke-width="2"/></svg>`;
+    case "vehicle":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M8 28h5l5-8h14l5 8h3v9H8z" fill="${c}"/><circle cx="16" cy="37" r="4" fill="${dark}"/><circle cx="34" cy="37" r="4" fill="${dark}"/><path d="M19 22h11" stroke="${pale}" stroke-width="2"/></svg>`;
+    case "ladder":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M16 42 27 6M31 42 20 6M18 34h11M20 26h7M22 18h3" stroke="${c}" stroke-width="5"/></svg>`;
+    case "key":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="17" cy="21" r="8" fill="none" stroke="${c}" stroke-width="6"/><path d="M24 26 40 42M33 35l5-5M37 39l4-4" stroke="${c}" stroke-width="6"/></svg>`;
+    case "spiral":
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M25 24c0 2-2 3-4 3-5 0-8-6-5-11 4-8 18-7 22 2 6 15-11 30-25 20" stroke="${c}" stroke-width="5" fill="none"/></svg>`;
+    default:
+      return `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="16" fill="${c}"/></svg>`;
+  }
+}

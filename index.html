@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MindSand 心理分析沙盘</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" role="img">
+              <path d="M7 31c8-8 25-8 34 0v8H7z" fill="#dfb66f" />
+              <path d="M13 20c4-8 18-8 22 0 2 4 0 9-4 12H17c-4-3-6-8-4-12z" fill="#4d9b91" />
+              <path d="M20 16h8v20h-8z" fill="#2f4f6f" opacity=".88" />
+            </svg>
+          </span>
+          <span>
+            <strong>MindSand</strong>
+            <small>心理分析沙盘</small>
+          </span>
+        </a>
+        <nav class="top-actions" aria-label="主要操作">
+          <button id="newSceneBtn" type="button">新沙盘</button>
+          <button id="saveLocalBtn" type="button">本地保存</button>
+          <button id="saveServerBtn" type="button">服务器保存</button>
+          <button id="exportBtn" type="button">导出报告</button>
+        </nav>
+      </header>
+
+      <main class="workspace">
+        <aside class="panel shelf-panel" aria-label="微缩物架">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Shelf</p>
+              <h1>微缩物</h1>
+            </div>
+            <button id="randomSeedBtn" class="icon-button" type="button" title="生成一个起点" aria-label="生成一个起点">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5" /></svg>
+            </button>
+          </div>
+          <div id="categoryTabs" class="category-tabs" role="tablist" aria-label="分类"></div>
+          <div id="symbolShelf" class="symbol-shelf"></div>
+        </aside>
+
+        <section class="studio">
+          <div class="session-bar panel">
+            <label>
+              <span>来访者编号</span>
+              <input id="clientCode" type="text" autocomplete="off" placeholder="匿名编号" />
+            </label>
+            <label class="wide-field">
+              <span>主题</span>
+              <input id="sceneTitle" type="text" autocomplete="off" placeholder="今天的沙盘主题" />
+            </label>
+            <label class="wide-field">
+              <span>目标</span>
+              <input id="sessionAim" type="text" autocomplete="off" placeholder="希望探索的问题" />
+            </label>
+          </div>
+
+          <div class="tray-tools panel" aria-label="沙盘工具">
+            <div class="tool-group" role="group" aria-label="模式">
+              <button class="tool-button active" data-tool="select" type="button" title="选择">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 3 7 17 2-7 7-2z" /></svg>
+                <span>选择</span>
+              </button>
+              <button class="tool-button" data-tool="place" type="button" title="放置">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                <span>放置</span>
+              </button>
+              <button class="tool-button" data-tool="rake" type="button" title="划沙">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16M7 5v14M12 5v14M17 5v14" /></svg>
+                <span>划沙</span>
+              </button>
+            </div>
+            <div class="tool-group" role="group" aria-label="调整">
+              <button id="rotateLeftBtn" class="icon-button" type="button" title="左旋" aria-label="左旋">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7v6h6M4 13a8 8 0 1 0 2-8" /></svg>
+              </button>
+              <button id="rotateRightBtn" class="icon-button" type="button" title="右旋" aria-label="右旋">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 7v6h-6M20 13a8 8 0 1 1-2-8" /></svg>
+              </button>
+              <button id="smallerBtn" class="icon-button" type="button" title="缩小" aria-label="缩小">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /></svg>
+              </button>
+              <button id="largerBtn" class="icon-button" type="button" title="放大" aria-label="放大">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+              </button>
+              <button id="duplicateBtn" class="icon-button" type="button" title="复制" aria-label="复制">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h10v12H8zM5 16H4V4h12v1" /></svg>
+              </button>
+              <button id="deleteBtn" class="icon-button danger" type="button" title="删除" aria-label="删除">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13" /></svg>
+              </button>
+              <button id="smoothBtn" class="icon-button" type="button" title="抚平沙面" aria-label="抚平沙面">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h16M7 12h10M9 16h6" /></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="tray-shell">
+            <div id="tray" class="sand-tray" aria-label="沙盘画布">
+              <canvas id="rakeCanvas" class="rake-canvas"></canvas>
+              <div class="tray-grid" aria-hidden="true"></div>
+              <span class="zone-label zone-left">过去</span>
+              <span class="zone-label zone-right">未来</span>
+              <span class="zone-label zone-top">意识</span>
+              <span class="zone-label zone-bottom">身体</span>
+              <div id="sceneItems" class="scene-items"></div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="panel analysis-panel" aria-label="分析面板">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Analysis</p>
+              <h2>即时分析</h2>
+            </div>
+            <button id="copyReportBtn" class="icon-button" type="button" title="复制报告" aria-label="复制报告">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h10v12H8zM5 16H4V4h12v1" /></svg>
+            </button>
+          </div>
+          <div class="notice">
+            仅用于心理教育、咨询记录与自我反思；不能替代临床诊断、治疗或危机干预。
+          </div>
+          <div class="metric-grid">
+            <div><span>微缩物</span><strong id="itemCount">0</strong></div>
+            <div><span>空间密度</span><strong id="densityText">空</strong></div>
+            <div><span>主区域</span><strong id="zoneText">无</strong></div>
+            <div><span>边界物</span><strong id="boundaryText">0</strong></div>
+          </div>
+          <div id="scoreBars" class="score-bars"></div>
+          <section class="analysis-block">
+            <h3>主题线索</h3>
+            <ul id="themeList" class="plain-list"></ul>
+          </section>
+          <section class="analysis-block">
+            <h3>观察提示</h3>
+            <ul id="promptList" class="plain-list"></ul>
+          </section>
+          <label class="notes-field">
+            <span>咨询师记录</span>
+            <textarea id="sessionNotes" rows="7" placeholder="记录语言、情绪、停顿、移动顺序与来访者解释"></textarea>
+          </label>
+          <section class="analysis-block">
+            <h3>研究依据</h3>
+            <div id="evidenceList" class="evidence-list"></div>
+          </section>
+        </aside>
+      </main>
+
+      <footer class="footer">
+        <span>MindSand 保存匿名编号与沙盘结构；正式咨询场景请另行取得知情同意。</span>
+        <a href="/RESEARCH_NOTES.md">研究笔记</a>
+      </footer>
+    </div>
+
+    <dialog id="safetyDialog" class="safety-dialog">
+      <form method="dialog">
+        <h2>使用边界</h2>
+        <p>本工具输出的是象征线索和反思问题，不是诊断结论。若存在自伤、伤害他人或急性危机，请立即联系当地紧急服务或线下专业人员。</p>
+        <button type="submit">我知道了</button>
+      </form>
+    </dialog>
+
+    <script src="/app.js" defer></script>
+  </body>
+</html>
