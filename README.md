@@ -24,8 +24,10 @@ npm start
    - Disk: 挂载到 `/var/data`
 4. 如需限制导出接口，设置环境变量 `ADMIN_KEY`。
 5. 如需启用 AI 深度解读，在 Render 环境变量中设置：
-   - `OPENAI_API_KEY`：服务端调用 OpenAI API 的密钥，不要放到前端代码。
-   - `OPENAI_MODEL`：默认 `gpt-5.4-mini`，可按账号可用模型调整。
+   - `OPENAI_API_KEY`：服务端调用模型网关的密钥，不要放到前端代码。
+   - `OPENAI_BASE_URL`：模型网关的 OpenAI 兼容地址，通常形如 `https://你的网关域名/v1`。
+   - `OPENAI_MODEL`：默认 `deepseek-v3:671b`。
+   - `AI_API_STYLE`：默认 `chat`，用于 OpenAI 兼容 `/chat/completions` 网关。
 
 ## 数据接口
 

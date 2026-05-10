@@ -7,9 +7,11 @@ const dataDir = process.env.DATA_DIR || process.env.RENDER_DISK_MOUNT_PATH || pa
 const sessionsFile = path.join(dataDir, "sessions.jsonl");
 const port = Number(process.env.PORT || 4175);
 const adminKey = process.env.ADMIN_KEY || "";
-const openaiApiKey = process.env.OPENAI_API_KEY || "";
-const openaiModel = process.env.OPENAI_MODEL || "gpt-5.4-mini";
-const openaiMaxOutputTokens = Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || 2600);
+const aiApiKey = process.env.OPENAI_API_KEY || process.env.AI_API_KEY || "";
+const aiModel = process.env.OPENAI_MODEL || process.env.AI_MODEL || "deepseek-v3:671b";
+const aiBaseUrl = normalizeBaseUrl(process.env.OPENAI_BASE_URL || process.env.AI_BASE_URL || "https://api.openai.com/v1");
+const aiApiStyle = (process.env.AI_API_STYLE || inferApiStyle(aiBaseUrl, aiModel)).toLowerCase();
+const aiMaxOutputTokens = Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || process.env.AI_MAX_OUTPUT_TOKENS || 2600);
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -40,15 +42,28 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (request.method === "GET" && url.pathname === "/api/ai-status") {
-      sendJson(response, 200, { enabled: Boolean(openaiApiKey), model: openaiModel });
+      sendJson(response, 200, {
+        enabled: Boolean(aiApiKey),
+        model: aiModel,
+        baseUrl: aiBaseUrl,
+        apiStyle: aiApiStyle,
+        needsBaseUrl: Boolean(aiApiKey) && isLikelyGatewayKey(aiApiKey) && aiBaseUrl === "https://api.openai.com/v1",
+      });
       return;
     }
 
     if (request.method === "POST" && url.pathname === "/api/ai-analysis") {
-      if (!openaiApiKey) {
+      if (!aiApiKey) {
         sendJson(response, 501, {
           error: "AI analysis is not configured. Set OPENAI_API_KEY on the server or in Render environment variables.",
           code: "OPENAI_API_KEY_MISSING",
+        });
+        return;
+      }
+      if (isLikelyGatewayKey(aiApiKey) && aiBaseUrl === "https://api.openai.com/v1") {
+        sendJson(response, 501, {
+          error: "This key looks like a model gateway key, not an OpenAI key. Set OPENAI_BASE_URL to the gateway API address, for example https://example.com/v1.",
+          code: "OPENAI_BASE_URL_MISSING",
         });
         return;
       }
@@ -56,7 +71,7 @@ const server = http.createServer(async (request, response) => {
       const analysis = await requestAiSandplayAnalysis(sanitizeAiPayload(payload));
       sendJson(response, 200, {
         ok: true,
-        model: openaiModel,
+        model: aiModel,
         generated_at: new Date().toISOString(),
         analysis,
       });
@@ -240,6 +255,20 @@ function cryptoSafeId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function normalizeBaseUrl(value) {
+  return String(value || "").replace(/\/+$/, "") || "https://api.openai.com/v1";
+}
+
+function inferApiStyle(baseUrl, model) {
+  if (!baseUrl.includes("api.openai.com")) return "chat";
+  if (String(model).includes("deepseek") || String(model).includes("qwen") || String(model).includes("gpt-oss")) return "chat";
+  return "responses";
+}
+
+function isLikelyGatewayKey(value) {
+  return /^[a-f0-9]{48,}$/i.test(String(value || ""));
+}
+
 function sanitizeAiPayload(payload) {
   return {
     title: String(payload.title || "").slice(0, 120),
@@ -265,20 +294,26 @@ function sanitizeAiPayload(payload) {
 }
 
 async function requestAiSandplayAnalysis(payload) {
-  const apiResponse = await fetch("https://api.openai.com/v1/responses", {
+  if (aiApiStyle === "responses") {
+    return requestResponsesAnalysis(payload);
+  }
+  return requestChatAnalysis(payload);
+}
+
+async function requestResponsesAnalysis(payload) {
+  const apiResponse = await fetch(`${aiBaseUrl}/responses`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${openaiApiKey}`,
+      Authorization: `Bearer ${aiApiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: openaiModel,
-      max_output_tokens: openaiMaxOutputTokens,
+      model: aiModel,
+      max_output_tokens: aiMaxOutputTokens,
       input: [
         {
           role: "system",
-          content:
-            "你是受训心理咨询师的沙盘治疗记录助手。请用中文输出。你的任务是根据沙盘结构、来访者叙述和咨询师记录，生成反思性心理假设、可验证证据和需要追问的问题。请给出3到6条心理含义假设、2到8条重要微缩物叙事、5到10个可问来访者的问题。不要诊断，不要声称确定来访者人格、创伤或疾病；所有解释都必须使用“可能、也许、可探索、需要来访者确认”等假设语言。若材料不足，明确说明缺失信息并给出追问。若出现自伤、伤人、急性危机线索，提示立即联系线下专业人员或当地紧急服务。",
+          content: sandplaySystemPrompt(),
         },
         {
           role: "user",
@@ -314,6 +349,84 @@ async function requestAiSandplayAnalysis(payload) {
   } catch (error) {
     throw new Error(`AI response was not valid JSON: ${error.message}`);
   }
+}
+
+async function requestChatAnalysis(payload) {
+  try {
+    return await requestChatAnalysisWithFormat(payload, "json_schema");
+  } catch (error) {
+    if (!shouldRetryWithoutJsonSchema(error)) throw error;
+    return requestChatAnalysisWithFormat(payload, "json_object");
+  }
+}
+
+async function requestChatAnalysisWithFormat(payload, formatMode) {
+  const apiResponse = await fetch(`${aiBaseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${aiApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: aiModel,
+      max_tokens: aiMaxOutputTokens,
+      temperature: 0.2,
+      messages: [
+        {
+          role: "system",
+          content: `${sandplaySystemPrompt()} 请严格输出 JSON，不要输出 Markdown。`,
+        },
+        {
+          role: "user",
+          content: `请分析以下沙盘资料，并返回符合指定结构的 JSON。\n\n${JSON.stringify(payload, null, 2)}`,
+        },
+      ],
+      response_format:
+        formatMode === "json_schema"
+          ? {
+              type: "json_schema",
+              json_schema: {
+                name: "sandplay_ai_analysis",
+                strict: true,
+                schema: aiAnalysisSchema(),
+              },
+            }
+          : { type: "json_object" },
+    }),
+  });
+
+  const data = await apiResponse.json().catch(() => ({}));
+  if (!apiResponse.ok) {
+    const message = data.error?.message || `AI gateway request failed with HTTP ${apiResponse.status}`;
+    const error = new Error(message);
+    error.status = apiResponse.status;
+    throw error;
+  }
+
+  const text = data.choices?.[0]?.message?.content || "";
+  if (!text.trim()) throw new Error("AI gateway returned an empty response");
+
+  try {
+    return JSON.parse(stripJsonFence(text));
+  } catch (error) {
+    throw new Error(`AI response was not valid JSON: ${error.message}`);
+  }
+}
+
+function sandplaySystemPrompt() {
+  return "你是受训心理咨询师的沙盘治疗记录助手。请用中文输出。你的任务是根据沙盘结构、来访者叙述和咨询师记录，生成反思性心理假设、可验证证据和需要追问的问题。请给出3到6条心理含义假设、2到8条重要微缩物叙事、5到10个可问来访者的问题。不要诊断，不要声称确定来访者人格、创伤或疾病；所有解释都必须使用“可能、也许、可探索、需要来访者确认”等假设语言。若材料不足，明确说明缺失信息并给出追问。若出现自伤、伤人、急性危机线索，提示立即联系线下专业人员或当地紧急服务。";
+}
+
+function shouldRetryWithoutJsonSchema(error) {
+  const message = String(error.message || "").toLowerCase();
+  return message.includes("response_format") || message.includes("json_schema") || message.includes("unsupported") || message.includes("invalid parameter");
+}
+
+function stripJsonFence(value) {
+  return String(value)
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "");
 }
 
 function extractOutputText(data) {
