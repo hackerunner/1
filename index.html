@@ -120,20 +120,34 @@
             </div>
             <button id="analyzeBtn" class="analysis-button" type="button">开始分析</button>
           </div>
-          <section class="panel ai-module" aria-label="AI 深度解读">
+          <section class="panel ai-module" aria-label="问答式 AI 解读">
             <div class="analysis-block-head">
               <div>
                 <p class="eyebrow">AI Interpretation</p>
-                <h2>AI 深度解读</h2>
+                <h2>问答式 AI 解读</h2>
               </div>
-              <button id="aiAnalysisBtn" class="secondary-action" type="button">AI 解读</button>
+              <button id="aiAnalysisBtn" class="secondary-action" type="button">直接 AI 解读</button>
             </div>
-            <label class="notes-field">
-              <span>来访者讲述</span>
-              <textarea id="clientStory" rows="5" placeholder="尽量记录来访者原话：这个沙盘叫什么？每个重要物件是谁或是什么？最重要、最不舒服、最想移动的部分在哪里？"></textarea>
+            <div class="process-coach">
+              <div class="coach-question">
+                <span>即时追问</span>
+                <strong id="processQuestion">先从一个最能代表当前状态的物件开始。</strong>
+              </div>
+              <div class="answer-box">
+                <textarea id="answerDraft" rows="2" placeholder="一句话记录来访者回答；也可以留空直接 AI 解读。"></textarea>
+                <div class="coach-actions">
+                  <button id="saveAnswerBtn" class="secondary-action compact-action" type="button">记录回答</button>
+                  <button id="nextQuestionBtn" class="ghost-action compact-action" type="button">换个追问</button>
+                </div>
+              </div>
+              <ol id="qaList" class="qa-list"></ol>
+            </div>
+            <label class="notes-field optional-note">
+              <span>补充原话（可选）</span>
+              <textarea id="clientStory" rows="3" placeholder="只记录来访者主动说出的关键词、标题或重要原话。"></textarea>
             </label>
             <div id="aiStatus" class="analysis-state compact">
-              先点击沙盘下方的“开始分析”，再补充来访者讲述，AI 会生成可验证的心理假设和追问。
+              先点击沙盘下方的“开始分析”，或直接让 AI 基于当前沙盘生成假设与追问。
             </div>
             <div id="aiAnalysisOutput" class="ai-output"></div>
           </section>

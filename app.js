@@ -86,6 +86,8 @@ const state = {
   aiGeneratedAt: "",
   aiDirty: false,
   aiLoading: false,
+  processQuestion: "先从一个最能代表当前状态的物件开始。",
+  qaLog: [],
   history: [],
 };
 
@@ -130,6 +132,11 @@ function cacheElements() {
   els.sceneTitle = document.getElementById("sceneTitle");
   els.sessionAim = document.getElementById("sessionAim");
   els.clientStory = document.getElementById("clientStory");
+  els.processQuestion = document.getElementById("processQuestion");
+  els.answerDraft = document.getElementById("answerDraft");
+  els.saveAnswerBtn = document.getElementById("saveAnswerBtn");
+  els.nextQuestionBtn = document.getElementById("nextQuestionBtn");
+  els.qaList = document.getElementById("qaList");
   els.sessionNotes = document.getElementById("sessionNotes");
   els.aiAnalysisBtn = document.getElementById("aiAnalysisBtn");
   els.aiStatus = document.getElementById("aiStatus");
@@ -160,6 +167,14 @@ function bindEvents() {
   document.getElementById("randomSeedBtn").addEventListener("click", seedScene);
   els.analyzeBtn.addEventListener("click", runMicroAnalysis);
   els.aiAnalysisBtn.addEventListener("click", requestAiAnalysis);
+  els.saveAnswerBtn.addEventListener("click", saveProcessAnswer);
+  els.nextQuestionBtn.addEventListener("click", () => cueProcessQuestion("manual", selectedItem()));
+  els.answerDraft.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      saveProcessAnswer();
+    }
+  });
   document.getElementById("newSceneBtn").addEventListener("click", newScene);
   document.getElementById("saveLocalBtn").addEventListener("click", saveLocalSession);
   document.getElementById("saveServerBtn").addEventListener("click", saveServerSession);
@@ -252,6 +267,7 @@ function render() {
   invalidateAnalysis();
   updateAnalyzeStatus();
   updateAiStatus();
+  renderProcessCoach();
   saveDraft();
 }
 
@@ -265,7 +281,7 @@ function renderItems() {
         <button class="scene-item ${selected}" data-id="${item.id}" type="button" draggable="false"
           style="left:${item.x}%;top:${item.y}%;width:${size}px;height:${size}px;margin-left:${-size / 2}px;margin-top:${-size / 2}px;transform:rotate(${item.rotation}deg)"
           title="${symbol.label}">
-          ${symbolSvg(symbol)}
+          <span class="scene-token">${symbolSvg(symbol)}</span>
         </button>
       `;
     })
@@ -365,14 +381,14 @@ function updateAiStatus(message) {
   if (state.aiLoading) {
     els.aiAnalysisBtn.disabled = true;
     els.aiAnalysisBtn.textContent = "解读中...";
-    els.aiStatus.textContent = "AI 正在整合沙盘结构、来访者讲述和咨询师记录。";
+    els.aiStatus.textContent = "AI 正在整合沙盘结构、动作追问、短回答和咨询师记录。";
     return;
   }
 
   els.aiAnalysisBtn.disabled = false;
   if (!state.lastAnalysis) {
-    els.aiAnalysisBtn.textContent = "AI 解读";
-    els.aiStatus.textContent = "先点击沙盘下方的“开始分析”，再使用 AI 深度解读。";
+    els.aiAnalysisBtn.textContent = "直接 AI 解读";
+    els.aiStatus.textContent = "可直接解读当前沙盘；系统会先生成见微知著分析，再交给 AI。";
     return;
   }
 
@@ -384,10 +400,148 @@ function updateAiStatus(message) {
     return;
   }
 
-  els.aiAnalysisBtn.textContent = "AI 解读";
-  els.aiStatus.textContent = els.clientStory.value.trim()
-    ? "已记录来访者讲述，可以生成更具体的心理含义假设。"
-    : "建议先补充来访者讲述；如果直接解读，AI 会优先生成需要追问的问题。";
+  els.aiAnalysisBtn.textContent = "直接 AI 解读";
+  const qaCount = state.qaLog.length;
+  els.aiStatus.textContent = qaCount
+    ? `已记录 ${qaCount} 条短问答，AI 会优先使用这些确认过的信息。`
+    : "无需长篇陈述；AI 会基于沙盘结构先给出假设，再列出最需要确认的问题。";
+}
+
+function renderProcessCoach() {
+  if (!els.processQuestion || !els.qaList) return;
+  els.processQuestion.textContent = state.processQuestion || "先从一个最能代表当前状态的物件开始。";
+
+  if (!state.qaLog.length) {
+    els.qaList.innerHTML = `<li class="qa-empty">尚未记录短回答。</li>`;
+    return;
+  }
+
+  els.qaList.innerHTML = state.qaLog
+    .slice(-5)
+    .reverse()
+    .map(
+      (entry) => `
+        <li>
+          <span>${escapeHtml(entry.question)}</span>
+          <strong>${escapeHtml(entry.answer)}</strong>
+        </li>
+      `,
+    )
+    .join("");
+}
+
+function saveProcessAnswer() {
+  const answer = els.answerDraft.value.trim();
+  if (!answer) {
+    notify("用一句话记录来访者回答即可");
+    return;
+  }
+
+  state.qaLog.push({
+    question: state.processQuestion,
+    answer,
+    at: new Date().toISOString(),
+  });
+  state.qaLog = state.qaLog.slice(-80);
+  els.answerDraft.value = "";
+  if (state.aiAnalysis) state.aiDirty = true;
+  renderProcessCoach();
+  updateAiStatus();
+  saveDraft();
+}
+
+function cueProcessQuestion(action, item = null) {
+  state.processQuestion = buildProcessQuestion(action, item);
+  if (state.aiAnalysis) state.aiDirty = true;
+  renderProcessCoach();
+  updateAiStatus();
+  saveDraft();
+}
+
+function buildProcessQuestion(action, item) {
+  const symbol = item ? getSymbol(item.symbolId) : null;
+  const label = symbol?.label || "这个场景";
+  const zone = item ? zoneOf(item) : "";
+  const nearest = item ? nearestItemLabel(item) : "";
+
+  const roleQuestion = symbol ? roleProcessQuestion(symbol.role, label) : "如果这个沙盘此刻会说一句话，它会说什么？";
+  const manualQuestions = [
+    "如果只问一个问题，来访者会希望从哪里开始说？",
+    "这个沙盘里最安静但最重要的位置在哪里？",
+    "哪个物件最想靠近别人，哪个最想保持距离？",
+    "如果允许移动一步，最先移动谁，为什么？",
+  ];
+
+  switch (action) {
+    case "add":
+      return state.items.length === 1
+        ? `第一个出现的是“${label}”。它为什么先来到沙盘里？`
+        : `刚放下“${label}”，它在${zone}像是在承担什么角色？`;
+    case "move":
+      return nearest
+        ? `“${label}”被移到${zone}，它和“${nearest}”的距离变化代表什么？`
+        : `“${label}”被移到${zone}，这个新位置让它更安全、更暴露，还是更有力量？`;
+    case "scale":
+      return `“${label}”的大小改变后，它的压力、价值或情绪强度有什么变化？`;
+    case "rotate":
+      return `“${label}”现在面向哪里，又像是在回避哪里？`;
+    case "duplicate":
+      return `出现第二个“${label}”后，它们更像同伴、重复的困扰，还是两个不同部分？`;
+    case "delete":
+      return `拿走“${label}”后，沙盘少了什么，也轻了什么？`;
+    case "rake":
+      return "沙面被划动后，哪些痕迹想留下，哪些痕迹想被抚平？";
+    case "smooth":
+      return "抚平沙面后，来访者希望重新开始，还是希望遮住某些痕迹？";
+    case "seed":
+      return "这个起始场景里，哪一个物件最像来访者当下的状态？";
+    case "manual":
+      return symbol ? roleQuestion : manualQuestions[state.qaLog.length % manualQuestions.length];
+    default:
+      return roleQuestion;
+  }
+}
+
+function roleProcessQuestion(role, label) {
+  const questions = {
+    core: `“${label}”此刻最需要被谁看见或保护？`,
+    vulnerable: `“${label}”最怕什么靠近，又最希望谁靠近？`,
+    relationship: `“${label}”的支持是主动给出的，还是被期待的？`,
+    distance: `“${label}”站在旁边看见了什么，却还没有进入？`,
+    protection: `“${label}”保护的是谁，代价又是什么？`,
+    instinct: `“${label}”的力量如果被允许表达，会先冲向哪里？`,
+    safety: `“${label}”提供的安全感够不够，谁能进去？`,
+    control: `“${label}”在高处看见了什么，也可能隔开了什么？`,
+    temporary: `“${label}”像临时停靠点，来访者想停多久？`,
+    threshold: `“${label}”打开后，谁可以进入，谁仍被挡在外面？`,
+    growth: `“${label}”现在是在扎根、伸展，还是等待季节？`,
+    obstacle: `“${label}”是阻碍、依靠，还是需要被翻越的重量？`,
+    affect: `“${label}”这股情绪是被盛住、扩散，还是被压住？`,
+    ground: `“${label}”让场景更稳定，还是让某处变得沉重？`,
+    connection: `“${label}”连接了哪两边，谁还没有走上去？`,
+    boundary: `“${label}”保护了什么，也隔开了什么？`,
+    movement: `“${label}”通向哪里，来访者愿意走到哪一步？`,
+    container: `“${label}”圈住的是完整、安全，还是限制？`,
+    resource: `“${label}”照亮了什么，什么仍在暗处？`,
+    unspoken: `“${label}”如果能被命名，它会叫什么？`,
+    value: `“${label}”对谁最有价值，又被谁守着？`,
+    time: `“${label}”提示的是等待、催促，还是某个重要时点？`,
+    reflection: `“${label}”让来访者看见了自己哪一部分？`,
+    transition: `“${label}”正在离开什么，又要抵达哪里？`,
+    agency: `“${label}”推动的是来访者自己的方向，还是外界要求？`,
+    ascent: `“${label}”往上走意味着成长、逃离，还是更高的要求？`,
+    access: `“${label}”可以打开什么，谁拥有打开的权力？`,
+    cycle: `“${label}”像循环往复，哪里是出口或转折点？`,
+  };
+  return questions[role] || `“${label}”在这个沙盘里最想表达什么？`;
+}
+
+function nearestItemLabel(item) {
+  const nearest = state.items
+    .filter((candidate) => candidate.id !== item.id)
+    .map((candidate) => ({ item: candidate, spacing: distance(item, candidate) }))
+    .sort((a, b) => a.spacing - b.spacing)[0];
+  return nearest && nearest.spacing <= 24 ? getSymbol(nearest.item.symbolId).label : "";
 }
 
 async function requestAiAnalysis() {
@@ -681,9 +835,11 @@ function onItemPointerUp() {
   window.removeEventListener("pointermove", onItemPointerMove);
   window.removeEventListener("pointercancel", onItemPointerCancel);
   const moved = Boolean(dragState?.moved);
+  const movedItem = moved ? getItem(dragState.id) : null;
   cleanupItemDrag();
   dragState = null;
   if (moved) {
+    cueProcessQuestion("move", movedItem);
     render();
     return;
   }
@@ -792,6 +948,7 @@ function drawRake(event) {
 function endRake() {
   window.removeEventListener("pointermove", drawRake);
   rakeState = null;
+  cueProcessQuestion("rake");
   saveDraft();
 }
 
@@ -810,6 +967,7 @@ function addItem(symbolId, x, y) {
   state.items.push(item);
   state.selectedId = item.id;
   setTool("select");
+  cueProcessQuestion("add", item);
   render();
 }
 
@@ -818,6 +976,7 @@ function rotateSelected(delta) {
   if (!item) return;
   pushHistory();
   item.rotation = normalizeAngle(item.rotation + delta);
+  cueProcessQuestion("rotate", item);
   render();
 }
 
@@ -826,6 +985,7 @@ function scaleSelected(delta) {
   if (!item) return;
   pushHistory();
   item.scale = clamp(Number((item.scale + delta).toFixed(2)), 0.65, 1.75);
+  cueProcessQuestion("scale", item);
   render();
 }
 
@@ -842,19 +1002,23 @@ function duplicateSelected() {
   };
   state.items.push(duplicate);
   state.selectedId = duplicate.id;
+  cueProcessQuestion("duplicate", duplicate);
   render();
 }
 
 function deleteSelected() {
   if (!state.selectedId) return;
+  const deleted = selectedItem();
   pushHistory();
   state.items = state.items.filter((item) => item.id !== state.selectedId);
   state.selectedId = null;
+  cueProcessQuestion("delete", deleted);
   render();
 }
 
 function smoothSand() {
   rakeContext.clearRect(0, 0, els.rakeCanvas.width, els.rakeCanvas.height);
+  cueProcessQuestion("smooth");
   invalidateAnalysis();
   updateAnalyzeStatus();
   saveDraft();
@@ -881,6 +1045,7 @@ function seedScene() {
     addedAt: new Date().toISOString(),
   }));
   state.selectedId = null;
+  cueProcessQuestion("seed");
   render();
 }
 
@@ -893,7 +1058,10 @@ function newScene() {
   els.sceneTitle.value = "";
   els.sessionAim.value = "";
   els.clientStory.value = "";
+  els.answerDraft.value = "";
   els.sessionNotes.value = "";
+  state.processQuestion = "先从一个最能代表当前状态的物件开始。";
+  state.qaLog = [];
   state.lastAnalysis = null;
   state.lastAnalyzedAt = "";
   state.analysisDirty = false;
@@ -901,7 +1069,7 @@ function newScene() {
   state.aiGeneratedAt = "";
   state.aiDirty = false;
   els.aiAnalysisOutput.innerHTML = "";
-  smoothSand();
+  rakeContext.clearRect(0, 0, els.rakeCanvas.width, els.rakeCanvas.height);
   render();
 }
 
@@ -1173,7 +1341,8 @@ function buildPayload() {
     client_code: els.clientCode.value.trim(),
     title: els.sceneTitle.value.trim(),
     aim: els.sessionAim.value.trim(),
-    client_story: els.clientStory.value.trim(),
+    client_story: buildClientStoryText(),
+    qa_log: state.qaLog,
     notes: els.sessionNotes.value.trim(),
     scene: state.items.map((item) => {
       const symbol = getSymbol(item.symbolId);
@@ -1186,6 +1355,19 @@ function buildPayload() {
       ? { ...state.aiAnalysis, generated_at: state.aiGeneratedAt, stale: state.aiDirty }
       : { status: "not_requested", stale: false },
   };
+}
+
+function buildClientStoryText() {
+  const qaText = state.qaLog
+    .map((entry, index) => `${index + 1}. 问：${entry.question}\n   答：${entry.answer}`)
+    .join("\n");
+  const extra = els.clientStory.value.trim();
+  return [
+    qaText ? `短问答记录：\n${qaText}` : "",
+    extra ? `补充原话：\n${extra}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function buildReport() {
@@ -1202,7 +1384,7 @@ function buildReport() {
 主题：${payload.title || "未填写"}
 目标：${payload.aim || "未填写"}
 
-## 来访者讲述
+## 短问答与补充原话
 
 ${payload.client_story || "未填写"}
 
@@ -1265,7 +1447,7 @@ ${markdownList(item.howToVerify)}`,
     .join("\n");
 
   return `
-## AI 深度解读
+## 问答式 AI 深度解读
 
 综合理解：${ai.summary || "未生成"}
 
@@ -1304,6 +1486,9 @@ function saveDraft() {
   const draft = {
     items: state.items,
     selectedId: state.selectedId,
+    processQuestion: state.processQuestion,
+    qaLog: state.qaLog,
+    answerDraft: els.answerDraft?.value || "",
     clientCode: els.clientCode?.value || "",
     sceneTitle: els.sceneTitle?.value || "",
     sessionAim: els.sessionAim?.value || "",
@@ -1321,10 +1506,13 @@ function restoreDraft() {
     const draft = JSON.parse(raw);
     state.items = Array.isArray(draft.items) ? draft.items : [];
     state.selectedId = draft.selectedId || null;
+    state.processQuestion = draft.processQuestion || state.processQuestion;
+    state.qaLog = Array.isArray(draft.qaLog) ? draft.qaLog : [];
     els.clientCode.value = draft.clientCode || "";
     els.sceneTitle.value = draft.sceneTitle || "";
     els.sessionAim.value = draft.sessionAim || "";
     els.clientStory.value = draft.clientStory || "";
+    els.answerDraft.value = draft.answerDraft || "";
     els.sessionNotes.value = draft.sessionNotes || "";
     if (draft.rake) {
       const image = new Image();

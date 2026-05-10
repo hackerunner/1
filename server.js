@@ -161,6 +161,13 @@ function sanitizeSession(payload, request) {
     title: String(payload.title || "").slice(0, 120),
     aim: String(payload.aim || "").slice(0, 500),
     client_story: String(payload.client_story || "").slice(0, 4000),
+    qa_log: Array.isArray(payload.qa_log)
+      ? payload.qa_log.slice(0, 80).map((entry) => ({
+          question: String(entry.question || "").slice(0, 240),
+          answer: String(entry.answer || "").slice(0, 500),
+          at: String(entry.at || "").slice(0, 40),
+        }))
+      : [],
     notes: String(payload.notes || "").slice(0, 3000),
     scene: Array.isArray(payload.scene) ? payload.scene.slice(0, 200) : [],
     analysis: payload.analysis && typeof payload.analysis === "object" ? payload.analysis : {},
@@ -283,6 +290,13 @@ function sanitizeAiPayload(payload) {
     title: String(payload.title || "").slice(0, 120),
     aim: String(payload.aim || "").slice(0, 500),
     client_story: String(payload.client_story || "").slice(0, 4000),
+    qa_log: Array.isArray(payload.qa_log)
+      ? payload.qa_log.slice(0, 80).map((entry) => ({
+          question: String(entry.question || "").slice(0, 240),
+          answer: String(entry.answer || "").slice(0, 500),
+          at: String(entry.at || "").slice(0, 40),
+        }))
+      : [],
     notes: String(payload.notes || "").slice(0, 3000),
     scene: Array.isArray(payload.scene)
       ? payload.scene.slice(0, 80).map((item) => ({
@@ -582,7 +596,15 @@ function fallbackTherapistFocus() {
 }
 
 function sandplaySystemPrompt() {
-  return "你是受训心理咨询师的沙盘治疗记录助手。请用中文输出。你的任务是根据沙盘结构、来访者叙述和咨询师记录，生成反思性心理假设、可验证证据和需要追问的问题。请给出3到6条心理含义假设、2到8条重要微缩物叙事、5到10个可问来访者的问题。不要诊断，不要声称确定来访者人格、创伤或疾病；所有解释都必须使用“可能、也许、可探索、需要来访者确认”等假设语言。若材料不足，明确说明缺失信息并给出追问。若出现自伤、伤人、急性危机线索，提示立即联系线下专业人员或当地紧急服务。";
+  return [
+    "你是受训心理咨询师的沙盘治疗记录助手。请用中文输出。",
+    "你的任务是直接根据沙盘结构、摆放顺序、空间关系、微缩物角色、短问答记录和咨询师记录，生成具体、可验证的心理含义假设。",
+    "不要要求来访者先写长篇叙述；短问答记录是已经被来访者确认过的材料，应优先使用。材料不足时，用3到6个简短追问补足关键空白。",
+    "请给出3到6条心理含义假设、2到8条重要微缩物叙事、3到6个可问来访者的问题。每条心理含义必须包含：观察证据、可能含义、可替代解释、如何向来访者验证。",
+    "问题要适合咨询师口头追问，一次只问一个点，避免让来访者长篇陈述。",
+    "不要诊断，不要声称确定来访者人格、创伤或疾病；所有解释都必须使用“可能、也许、可探索、需要来访者确认”等假设语言。",
+    "若出现自伤、伤人、急性危机线索，提示立即联系线下专业人员或当地紧急服务。",
+  ].join("\n");
 }
 
 function shouldRetryWithSimplerFormat(error) {
