@@ -6,13 +6,26 @@
 
 沙盘/箱庭/沙游通常由沙盘容器、干/湿沙、微缩物架、自由建构、治疗师见证与后续叙事构成。解释原则不是把单个符号直接等同为诊断，而是综合物件选择、空间位置、边界、聚集/隔离、移动顺序、来访者命名、情绪与文化语境。
 
-本项目采用的分析维度：
+本项目采用“先观察、后解读”的分析维度：
 
 - 空间：中心、边缘、左/右、上/下、四象限。
 - 象征：人物、容器、自然、边界、能量、行动。
 - 关系：靠近、隔离、桥接、保护、阻断。
 - 过程：先后顺序、修改、删除、重复、留白。
 - 输出：只给线索和提问，不给临床诊断。
+
+## 见微知著分析模式
+
+新版交互将实时分析改为“建构完成后点击分析”。依据是：沙盘的治疗价值常来自自由建构、沉默见证、来访者命名和后续叙事；过早解释会打断投射和象征过程。因此系统只在用户主动点击“见微知著分析”后，从微线索汇总出可检验假设。
+
+分析顺序：
+
+- 第一物件：第一个被放下的物件常是进入主题的入口，不直接定性，只询问“为什么它先出现”。
+- 位置结构：中心、边缘、四象限和留白优先于单个物件词典。
+- 关系距离：靠近、隔开、桥接、包围、孤立，是关系主题的主要证据。
+- 重复线索：重复类别和重复角色比一次性象征更适合追踪。
+- 体量和动作：放大、缩小、旋转、复制、删除、移动，是强度和修正过程的线索。
+- 叙事回填：所有系统假设必须交给来访者命名、讲述和修正。
 
 ## 经典与著名书籍
 
@@ -26,6 +39,7 @@
 - Bradway, K., Chambers, L., & Chiaia, M. E. (2005). *Sandplay in Three Voices: Images, Relationships, the Numinous*. 关系、沉默、自性、阴影等主题。来源：[Google Books](https://books.google.com/books/about/Sandplay_in_Three_Voices.html?id=kVcsP2CVNkkC)、[Routledge DOI](https://doi.org/10.4324/9780203014905)。
 - Turner, B. A. (2005). *The Handbook of Sandplay Therapy*. 荣格沙盘训练与参考手册。来源：[Temenos Press](https://temenospress.com/books/the-handbook-of-sandplay-therapy/)。
 - Homeyer, L. E., & Sweeney, D. S. (2023). *Sandtray Therapy: A Practical Manual* (4th ed.). 沙盘治疗实践、流程、创伤与研究综述。来源：[Routledge](https://www.routledge.com/Sandtray-Therapy-A-Practical-Manual/Homeyer-Sweeney/p/book/9781032117553)。
+- Friedman, H. S., & Mitchell, R. R. (1994). *Sandplay: Past, Present and Future*. 沙盘发展史、主要治疗趋势和关键人物。来源：[Routledge](https://www.routledge.com/Sandplay-Past-Present-and-Future/Friedman-RogersMitchell/p/book/9780415101370)。
 - Unnsteinsdóttir, K., & Turner, B. A. (2012). *Sandplay and Storytelling*. 沙盘、想象叙事与儿童学习发展。来源：[Temenos Press](https://temenospress.com/books/sandplay-and-storytelling/)。
 
 ## 重点期刊文献
@@ -44,6 +58,7 @@
 ## 产品转译
 
 - 不把符号映射为固定诊断；系统只显示“可能关注点”和“可追问问题”。
+- 默认不实时分析；点击“见微知著分析”后才输出结果，保护自由建构过程。
 - 记录位置、类别、数量、聚集/隔离与边界，但把最终解释权交还给来访者叙事。
 - 保留危机与临床边界提示。
 - 支持纵向保存，便于咨询师观察同一来访者多次沙盘的变化。

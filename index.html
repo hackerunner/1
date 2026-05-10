@@ -112,13 +112,21 @@
               <div id="sceneItems" class="scene-items"></div>
             </div>
           </div>
+          <div class="analysis-cta panel">
+            <div>
+              <p class="eyebrow">Micro Pattern Mode</p>
+              <strong>见微知著分析</strong>
+              <span id="analyzeStatus">完成沙盘后，点击右侧按钮开始分析。</span>
+            </div>
+            <button id="analyzeBtn" class="analysis-button" type="button">开始分析</button>
+          </div>
         </section>
 
         <aside class="panel analysis-panel" aria-label="分析面板">
           <div class="panel-head">
             <div>
               <p class="eyebrow">Analysis</p>
-              <h2>即时分析</h2>
+              <h2 id="analysisTitle">等待分析</h2>
             </div>
             <button id="copyReportBtn" class="icon-button" type="button" title="复制报告" aria-label="复制报告">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8h10v12H8zM5 16H4V4h12v1" /></svg>
@@ -127,13 +135,20 @@
           <div class="notice">
             仅用于心理教育、咨询记录与自我反思；不能替代临床诊断、治疗或危机干预。
           </div>
+          <div id="analysisState" class="analysis-state">
+            先让来访者完成沙盘。系统会保持沉默，直到点击沙盘下方的“开始分析”。
+          </div>
           <div class="metric-grid">
-            <div><span>微缩物</span><strong id="itemCount">0</strong></div>
-            <div><span>空间密度</span><strong id="densityText">空</strong></div>
-            <div><span>主区域</span><strong id="zoneText">无</strong></div>
-            <div><span>边界物</span><strong id="boundaryText">0</strong></div>
+            <div><span>微缩物</span><strong id="itemCount">--</strong></div>
+            <div><span>空间密度</span><strong id="densityText">待分析</strong></div>
+            <div><span>主区域</span><strong id="zoneText">待分析</strong></div>
+            <div><span>边界物</span><strong id="boundaryText">--</strong></div>
           </div>
           <div id="scoreBars" class="score-bars"></div>
+          <section class="analysis-block">
+            <h3>微证据链</h3>
+            <ul id="microSignalList" class="plain-list"></ul>
+          </section>
           <section class="analysis-block">
             <h3>主题线索</h3>
             <ul id="themeList" class="plain-list"></ul>

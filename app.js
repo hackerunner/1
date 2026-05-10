@@ -61,6 +61,16 @@ const evidenceItems = [
     meta: "Safe and protected space, World Technique, symbolic expression and nonverbal process.",
     url: "/RESEARCH_NOTES.md",
   },
+  {
+    title: "Mitchell & Friedman",
+    meta: "Themes in Sandplay: clinical tracking of repeated symbolic patterns.",
+    url: "https://www.routledge.com/Sandplay-Past-Present-and-Future/Friedman-RogersMitchell/p/book/9780415101370",
+  },
+  {
+    title: "Homeyer & Sweeney",
+    meta: "Sandtray practice manual: client story, process observation, and cautious interpretation.",
+    url: "https://www.routledge.com/Sandtray-Therapy-A-Practical-Manual/Homeyer-Sweeney/p/book/9781032117553",
+  },
 ];
 
 const state = {
@@ -69,6 +79,9 @@ const state = {
   tool: "select",
   items: [],
   selectedId: null,
+  lastAnalysis: null,
+  lastAnalyzedAt: "",
+  analysisDirty: false,
   history: [],
 };
 
@@ -101,6 +114,11 @@ function cacheElements() {
   els.zoneText = document.getElementById("zoneText");
   els.boundaryText = document.getElementById("boundaryText");
   els.scoreBars = document.getElementById("scoreBars");
+  els.analysisTitle = document.getElementById("analysisTitle");
+  els.analysisState = document.getElementById("analysisState");
+  els.analyzeBtn = document.getElementById("analyzeBtn");
+  els.analyzeStatus = document.getElementById("analyzeStatus");
+  els.microSignalList = document.getElementById("microSignalList");
   els.themeList = document.getElementById("themeList");
   els.promptList = document.getElementById("promptList");
   els.clientCode = document.getElementById("clientCode");
@@ -129,6 +147,7 @@ function bindEvents() {
   document.getElementById("deleteBtn").addEventListener("click", deleteSelected);
   document.getElementById("smoothBtn").addEventListener("click", smoothSand);
   document.getElementById("randomSeedBtn").addEventListener("click", seedScene);
+  els.analyzeBtn.addEventListener("click", runMicroAnalysis);
   document.getElementById("newSceneBtn").addEventListener("click", newScene);
   document.getElementById("saveLocalBtn").addEventListener("click", saveLocalSession);
   document.getElementById("saveServerBtn").addEventListener("click", saveServerSession);
@@ -206,8 +225,8 @@ function renderShelf() {
 
 function render() {
   renderItems();
-  const analysis = analyzeScene();
-  renderAnalysis(analysis);
+  invalidateAnalysis();
+  updateAnalyzeStatus();
   saveDraft();
 }
 
@@ -235,6 +254,9 @@ function renderItems() {
 }
 
 function renderAnalysis(analysis) {
+  els.analysisTitle.textContent = "见微知著";
+  els.analysisState.textContent = `已在 ${new Date(state.lastAnalyzedAt).toLocaleTimeString()} 生成分析。后续移动、增删物件后，请重新点击底部按钮。`;
+  els.analysisState.classList.remove("stale");
   els.itemCount.textContent = analysis.itemCount;
   els.densityText.textContent = analysis.density;
   els.zoneText.textContent = analysis.dominantZone;
@@ -250,8 +272,55 @@ function renderAnalysis(analysis) {
       `,
     )
     .join("");
+  els.microSignalList.innerHTML = analysis.microSignals.map((signal) => `<li>${signal}</li>`).join("");
   els.themeList.innerHTML = analysis.themes.map((theme) => `<li>${theme}</li>`).join("");
   els.promptList.innerHTML = analysis.prompts.map((prompt) => `<li>${prompt}</li>`).join("");
+}
+
+function renderAnalysisPlaceholder() {
+  els.analysisTitle.textContent = "等待分析";
+  els.analysisState.textContent = "先完成沙盘建构。系统不实时解读，避免打断投射和叙事过程。";
+  els.analysisState.classList.remove("stale");
+  els.itemCount.textContent = "--";
+  els.densityText.textContent = "待分析";
+  els.zoneText.textContent = "待分析";
+  els.boundaryText.textContent = "--";
+  els.scoreBars.innerHTML = `<div class="analysis-empty">点击沙盘下方的“开始分析”后，才会生成维度条。</div>`;
+  els.microSignalList.innerHTML = `<li>等待记录第一物件、中心/边缘、重复、孤立、边界和连接等微线索。</li>`;
+  els.themeList.innerHTML = `<li>当前尚未启动分析。</li>`;
+  els.promptList.innerHTML = `<li>先让来访者完成摆放，再邀请其命名和讲述。</li>`;
+}
+
+function runMicroAnalysis() {
+  state.lastAnalysis = analyzeScene();
+  state.lastAnalyzedAt = new Date().toISOString();
+  state.analysisDirty = false;
+  renderAnalysis(state.lastAnalysis);
+  updateAnalyzeStatus();
+  notify("见微知著分析已生成");
+}
+
+function invalidateAnalysis() {
+  if (!state.lastAnalysis) {
+    renderAnalysisPlaceholder();
+    return;
+  }
+  state.analysisDirty = true;
+  els.analysisState.textContent = "沙盘已经改变。右侧仍保留上一次分析，点击底部按钮可重新生成。";
+  els.analysisState.classList.add("stale");
+}
+
+function updateAnalyzeStatus() {
+  const count = state.items.length;
+  if (!state.lastAnalysis) {
+    els.analyzeBtn.textContent = count ? "开始分析" : "分析空沙盘";
+    els.analyzeStatus.textContent = count ? `已放置 ${count} 个微缩物，点击开始分析。` : "尚未放置微缩物，也可以分析空沙盘的留白。";
+    return;
+  }
+  els.analyzeBtn.textContent = state.analysisDirty ? "重新分析" : "再次分析";
+  els.analyzeStatus.textContent = state.analysisDirty
+    ? `沙盘已改变，当前有 ${count} 个微缩物。`
+    : `已分析 ${state.lastAnalysis.itemCount} 个微缩物。`;
 }
 
 function renderEvidence() {
@@ -287,7 +356,9 @@ function onTrayPointerDown(event) {
     return;
   }
 
-  render();
+  renderItems();
+  updateAnalyzeStatus();
+  saveDraft();
 }
 
 function onShelfPointerDown(event) {
@@ -369,6 +440,7 @@ function onItemPointerDown(event) {
     startY: item.y,
     rectWidth: rect.width,
     rectHeight: rect.height,
+    moved: false,
   };
   event.currentTarget.setPointerCapture(event.pointerId);
   window.addEventListener("pointermove", onItemPointerMove);
@@ -381,6 +453,9 @@ function onItemPointerMove(event) {
   if (!item) return;
   const dx = ((event.clientX - dragState.startClientX) / dragState.rectWidth) * 100;
   const dy = ((event.clientY - dragState.startClientY) / dragState.rectHeight) * 100;
+  if (Math.abs(dx) > 0.2 || Math.abs(dy) > 0.2) {
+    dragState.moved = true;
+  }
   item.x = clamp(dragState.startX + dx, 3, 97);
   item.y = clamp(dragState.startY + dy, 4, 96);
   positionItemNode(dragState.node, item);
@@ -388,9 +463,16 @@ function onItemPointerMove(event) {
 
 function onItemPointerUp() {
   window.removeEventListener("pointermove", onItemPointerMove);
+  const moved = Boolean(dragState?.moved);
   dragState?.node?.classList.remove("dragging");
   dragState = null;
-  render();
+  if (moved) {
+    render();
+    return;
+  }
+  renderItems();
+  updateAnalyzeStatus();
+  saveDraft();
 }
 
 function positionItemNode(node, item) {
@@ -521,6 +603,8 @@ function deleteSelected() {
 
 function smoothSand() {
   rakeContext.clearRect(0, 0, els.rakeCanvas.width, els.rakeCanvas.height);
+  invalidateAnalysis();
+  updateAnalyzeStatus();
   saveDraft();
 }
 
@@ -557,6 +641,9 @@ function newScene() {
   els.sceneTitle.value = "";
   els.sessionAim.value = "";
   els.sessionNotes.value = "";
+  state.lastAnalysis = null;
+  state.lastAnalyzedAt = "";
+  state.analysisDirty = false;
   smoothSand();
   render();
 }
@@ -591,8 +678,20 @@ function analyzeScene() {
   const affectCount = (roleCounts.affect || 0) + (roleCounts.unspoken || 0);
   const supportCount = (roleCounts.safety || 0) + (roleCounts.protection || 0) + (roleCounts.resource || 0);
   const isolatedItems = isolatedSymbols(items);
+  const closePairs = closeSymbolPairs(items);
   const dominantZone = dominant(zoneCounts) || "无";
   const density = densityLabel(itemCount);
+  const microSignals = deriveMicroSignals({
+    items,
+    categoryCounts,
+    zoneCounts,
+    centerItems,
+    perimeterItems,
+    isolatedItems,
+    closePairs,
+    dominantZone,
+    density,
+  });
 
   const themes = [];
   const prompts = [];
@@ -662,10 +761,101 @@ function analyzeScene() {
     categoryCounts,
     roleCounts,
     zoneCounts,
+    microSignals,
     themes,
     prompts,
     scores,
   };
+}
+
+function deriveMicroSignals({ items, categoryCounts, zoneCounts, centerItems, perimeterItems, isolatedItems, closePairs, dominantZone, density }) {
+  if (!items.length) {
+    return [
+      "留白本身是第一条线索：没有放置物件时，重点可放在回避、等待、安全感、控制权或尚未被命名的主题。",
+      "空沙盘不等于没有内容；需要回到来访者的解释，询问其对空白、沙面和边界的感受。",
+    ];
+  }
+
+  const ordered = [...items].sort((a, b) => itemOrderTime(a) - itemOrderTime(b));
+  const first = ordered[0];
+  const last = ordered[ordered.length - 1];
+  const largest = [...items].sort((a, b) => b.scale - a.scale)[0];
+  const repeated = Object.entries(categoryCounts)
+    .filter(([, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .map(([category, count]) => `${categoryLabel(category)} ${count} 个`);
+  const leftCount = items.filter((item) => item.x < 45).length;
+  const rightCount = items.filter((item) => item.x > 55).length;
+  const upperCount = items.filter((item) => item.y < 45).length;
+  const lowerCount = items.filter((item) => item.y > 55).length;
+  const dominantZoneCount = zoneCounts[dominantZone] || 0;
+
+  const signals = [
+    `第一物件是“${first.symbol.label}”，位于${zoneOf(first)}，常作为进入主题的门口；先问它为什么第一个出现。`,
+  ];
+
+  if (last && last.id !== first.id) {
+    signals.push(`最后放下的是“${last.symbol.label}”，可观察它是在补充、修复、封口，还是改变前面场景的含义。`);
+  }
+
+  signals.push(`主区域为${dominantZone}（${dominantZoneCount} 个物件），空间密度为${density}；这比单个符号更适合作为结构性线索。`);
+
+  if (centerItems.length) {
+    signals.push(`中心区承载“${centerItems.map((item) => item.symbol.label).join("、")}”，提示当前最容易被看见或最需要被承接的内容。`);
+  } else {
+    signals.push("中心区留白，提示核心位置暂未被占据；可询问留白是安全、空洞、等待，还是不可触碰。");
+  }
+
+  if (largest && largest.scale > 1.05) {
+    signals.push(`最大的物件是“${largest.symbol.label}”，体量被放大，可能代表强度、价值、压力或需要优先处理的对象。`);
+  }
+
+  if (repeated.length) {
+    signals.push(`重复类别：${repeated.join("、")}。重复比单个象征更可靠，适合追踪主题是否在多处回返。`);
+  }
+
+  if (closePairs.length) {
+    const pairText = closePairs
+      .slice(0, 2)
+      .map((pair) => `“${pair.a.symbol.label}”靠近“${pair.b.symbol.label}”`)
+      .join("；");
+    signals.push(`亲近线索：${pairText}。靠近可被理解为联盟、依赖、冲突或无法分离，需由来访者命名。`);
+  }
+
+  if (isolatedItems.length) {
+    signals.push(`孤立线索：${isolatedItems.map((item) => `“${item.symbol.label}”`).join("、")}离其他物件较远，可能是被保护、被排除或自成资源。`);
+  }
+
+  if (perimeterItems.length >= Math.ceil(items.length / 2)) {
+    signals.push("大量物件靠近边缘，边界感强；可观察来访者是否需要距离、退路或外部保护。");
+  }
+
+  if (Math.abs(leftCount - rightCount) >= 2) {
+    signals.push(leftCount > rightCount ? "左侧物件明显更多，可关注过去、记忆和既有关系的牵引。" : "右侧物件明显更多，可关注未来、行动和未完成目标的牵引。");
+  }
+
+  if (Math.abs(upperCount - lowerCount) >= 2) {
+    signals.push(upperCount > lowerCount ? "上半区物件更多，可关注意识化、理想、秩序或精神性表达。" : "下半区物件更多，可关注身体感、情绪沉积、现实负担或本能层面。");
+  }
+
+  return signals.slice(0, 9);
+}
+
+function closeSymbolPairs(items) {
+  const pairs = [];
+  for (let i = 0; i < items.length; i += 1) {
+    for (let j = i + 1; j < items.length; j += 1) {
+      const spacing = distance(items[i], items[j]);
+      if (spacing <= 16) {
+        pairs.push({ a: items[i], b: items[j], spacing });
+      }
+    }
+  }
+  return pairs.sort((a, b) => a.spacing - b.spacing);
+}
+
+function itemOrderTime(item) {
+  return Date.parse(item.addedAt || "") || 0;
 }
 
 function saveLocalSession() {
@@ -693,6 +883,10 @@ async function saveServerSession() {
 
 function exportReport() {
   const report = buildReport();
+  if (!report) {
+    notify("请先点击沙盘下方的见微知著分析");
+    return;
+  }
   const blob = new Blob([report], { type: "text/markdown;charset=utf-8" });
   const anchor = document.createElement("a");
   anchor.href = URL.createObjectURL(blob);
@@ -702,8 +896,13 @@ function exportReport() {
 }
 
 async function copyReport() {
+  const report = buildReport();
+  if (!report) {
+    notify("请先点击沙盘下方的见微知著分析");
+    return;
+  }
   try {
-    await navigator.clipboard.writeText(buildReport());
+    await navigator.clipboard.writeText(report);
     notify("报告已复制");
   } catch {
     notify("复制失败，请使用导出报告");
@@ -719,11 +918,14 @@ function buildPayload() {
     aim: els.sessionAim.value.trim(),
     notes: els.sessionNotes.value.trim(),
     scene: state.items.map((item) => ({ ...item, label: getSymbol(item.symbolId).label, category: getSymbol(item.symbolId).category })),
-    analysis: analyzeScene(),
+    analysis: state.lastAnalysis
+      ? { ...state.lastAnalysis, generated_at: state.lastAnalyzedAt, stale: state.analysisDirty }
+      : { status: "not_requested", stale: false },
   };
 }
 
 function buildReport() {
+  if (!state.lastAnalysis) return "";
   const payload = buildPayload();
   const analysis = payload.analysis;
   const sceneRows = payload.scene
@@ -742,6 +944,10 @@ function buildReport() {
 - 空间密度：${analysis.density}
 - 主区域：${analysis.dominantZone}
 - 边界物数量：${analysis.boundaryCount}
+
+## 微证据链
+
+${analysis.microSignals.map((signal) => `- ${signal}`).join("\n")}
 
 ## 主题线索
 
@@ -836,6 +1042,10 @@ function toCanvasPoint(point) {
 
 function getSymbol(id) {
   return symbols.find((symbol) => symbol.id === id) || symbols[0];
+}
+
+function categoryLabel(id) {
+  return categories.find((category) => category.id === id)?.label || id;
 }
 
 function getItem(id) {
