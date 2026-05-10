@@ -399,6 +399,24 @@ textarea {
   background: #1e665f;
 }
 
+.ai-module {
+  margin-top: 10px;
+  padding: 14px;
+}
+
+.ai-module h2 {
+  margin: 2px 0 0;
+  font-size: 1.15rem;
+}
+
+.ai-module .notes-field {
+  margin-top: 10px;
+}
+
+.ai-module .analysis-state {
+  margin-top: 10px;
+}
+
 .sand-tray {
   position: relative;
   overflow: hidden;
@@ -827,12 +845,14 @@ textarea {
   .topbar,
   .footer,
   .tray-tools,
-  .analysis-cta {
+  .analysis-cta,
+  .ai-module .analysis-block-head {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .analysis-button {
+  .analysis-button,
+  .secondary-action {
     width: 100%;
   }
 

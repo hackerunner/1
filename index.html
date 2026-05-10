@@ -120,6 +120,23 @@
             </div>
             <button id="analyzeBtn" class="analysis-button" type="button">开始分析</button>
           </div>
+          <section class="panel ai-module" aria-label="AI 深度解读">
+            <div class="analysis-block-head">
+              <div>
+                <p class="eyebrow">AI Interpretation</p>
+                <h2>AI 深度解读</h2>
+              </div>
+              <button id="aiAnalysisBtn" class="secondary-action" type="button">AI 解读</button>
+            </div>
+            <label class="notes-field">
+              <span>来访者讲述</span>
+              <textarea id="clientStory" rows="5" placeholder="尽量记录来访者原话：这个沙盘叫什么？每个重要物件是谁或是什么？最重要、最不舒服、最想移动的部分在哪里？"></textarea>
+            </label>
+            <div id="aiStatus" class="analysis-state compact">
+              先点击沙盘下方的“开始分析”，再补充来访者讲述，AI 会生成可验证的心理假设和追问。
+            </div>
+            <div id="aiAnalysisOutput" class="ai-output"></div>
+          </section>
         </section>
 
         <aside class="panel analysis-panel" aria-label="分析面板">
@@ -156,20 +173,6 @@
           <section class="analysis-block">
             <h3>观察提示</h3>
             <ul id="promptList" class="plain-list"></ul>
-          </section>
-          <label class="notes-field">
-            <span>来访者讲述</span>
-            <textarea id="clientStory" rows="6" placeholder="尽量记录来访者原话：这个沙盘叫什么？每个重要物件是谁或是什么？最重要、最不舒服、最想移动的部分在哪里？"></textarea>
-          </label>
-          <section class="analysis-block ai-analysis-block">
-            <div class="analysis-block-head">
-              <h3>AI 深度解读</h3>
-              <button id="aiAnalysisBtn" class="secondary-action" type="button">AI 解读</button>
-            </div>
-            <div id="aiStatus" class="analysis-state compact">
-              先点击沙盘下方的“开始分析”，再补充来访者讲述，AI 会生成可验证的心理假设和追问。
-            </div>
-            <div id="aiAnalysisOutput" class="ai-output"></div>
           </section>
           <label class="notes-field">
             <span>咨询师记录</span>
