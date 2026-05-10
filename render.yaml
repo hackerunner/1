@@ -20,6 +20,6 @@ services:
       - key: OPENAI_BASE_URL
         sync: false
       - key: OPENAI_MODEL
-        value: deepseek-v3:671b
+        value: deepseek-v3:671b,deepseek-v3.2
       - key: AI_API_STYLE
         value: chat

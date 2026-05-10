@@ -8,7 +8,8 @@ const sessionsFile = path.join(dataDir, "sessions.jsonl");
 const port = Number(process.env.PORT || 4175);
 const adminKey = process.env.ADMIN_KEY || "";
 const aiApiKey = process.env.OPENAI_API_KEY || process.env.AI_API_KEY || "";
-const aiModel = process.env.OPENAI_MODEL || process.env.AI_MODEL || "deepseek-v3:671b";
+const aiModels = splitModelList(process.env.OPENAI_MODEL || process.env.AI_MODEL || "deepseek-v3:671b,deepseek-v3.2");
+const aiModel = aiModels[0];
 const aiBaseUrl = normalizeBaseUrl(process.env.OPENAI_BASE_URL || process.env.AI_BASE_URL || "https://api.openai.com/v1");
 const aiApiStyle = (process.env.AI_API_STYLE || inferApiStyle(aiBaseUrl, aiModel)).toLowerCase();
 const aiMaxOutputTokens = Number(process.env.OPENAI_MAX_OUTPUT_TOKENS || process.env.AI_MAX_OUTPUT_TOKENS || 2600);
@@ -45,6 +46,7 @@ const server = http.createServer(async (request, response) => {
       sendJson(response, 200, {
         enabled: Boolean(aiApiKey),
         model: aiModel,
+        fallbackModels: aiModels.slice(1),
         baseUrl: aiBaseUrl,
         apiStyle: aiApiStyle,
         needsBaseUrl: Boolean(aiApiKey) && isLikelyGatewayKey(aiApiKey) && aiBaseUrl === "https://api.openai.com/v1",
@@ -68,12 +70,12 @@ const server = http.createServer(async (request, response) => {
         return;
       }
       const payload = JSON.parse(await readBody(request));
-      const analysis = await requestAiSandplayAnalysis(sanitizeAiPayload(payload));
+      const result = await requestAiSandplayAnalysis(sanitizeAiPayload(payload));
       sendJson(response, 200, {
         ok: true,
-        model: aiModel,
+        model: result.model,
         generated_at: new Date().toISOString(),
-        analysis,
+        analysis: result.analysis,
       });
       return;
     }
@@ -259,6 +261,13 @@ function normalizeBaseUrl(value) {
   return String(value || "").replace(/\/+$/, "") || "https://api.openai.com/v1";
 }
 
+function splitModelList(value) {
+  return String(value || "")
+    .split(",")
+    .map((model) => model.trim())
+    .filter(Boolean);
+}
+
 function inferApiStyle(baseUrl, model) {
   if (!baseUrl.includes("api.openai.com")) return "chat";
   if (String(model).includes("deepseek") || String(model).includes("qwen") || String(model).includes("gpt-oss")) return "chat";
@@ -294,13 +303,20 @@ function sanitizeAiPayload(payload) {
 }
 
 async function requestAiSandplayAnalysis(payload) {
-  if (aiApiStyle === "responses") {
-    return requestResponsesAnalysis(payload);
+  let lastError = null;
+  for (const model of aiModels) {
+    try {
+      const analysis = aiApiStyle === "responses" ? await requestResponsesAnalysis(payload, model) : await requestChatAnalysis(payload, model);
+      return { model, analysis };
+    } catch (error) {
+      lastError = error;
+      if (!isModelUnavailable(error)) throw error;
+    }
   }
-  return requestChatAnalysis(payload);
+  throw lastError || new Error("No AI model was available");
 }
 
-async function requestResponsesAnalysis(payload) {
+async function requestResponsesAnalysis(payload, model) {
   const apiResponse = await fetch(`${aiBaseUrl}/responses`, {
     method: "POST",
     headers: {
@@ -308,7 +324,7 @@ async function requestResponsesAnalysis(payload) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: aiModel,
+      model,
       max_output_tokens: aiMaxOutputTokens,
       input: [
         {
@@ -345,59 +361,68 @@ async function requestResponsesAnalysis(payload) {
   }
 
   try {
-    return JSON.parse(text);
+    return normalizeAiAnalysis(JSON.parse(text));
   } catch (error) {
     throw new Error(`AI response was not valid JSON: ${error.message}`);
   }
 }
 
-async function requestChatAnalysis(payload) {
-  try {
-    return await requestChatAnalysisWithFormat(payload, "json_schema");
-  } catch (error) {
-    if (!shouldRetryWithoutJsonSchema(error)) throw error;
-    return requestChatAnalysisWithFormat(payload, "json_object");
+async function requestChatAnalysis(payload, model) {
+  let lastError = null;
+  for (const formatMode of ["json_schema", "json_object", "plain"]) {
+    try {
+      return await requestChatAnalysisWithFormat(payload, formatMode, model);
+    } catch (error) {
+      lastError = error;
+      if (!shouldRetryWithSimplerFormat(error)) throw error;
+    }
   }
+  throw lastError;
 }
 
-async function requestChatAnalysisWithFormat(payload, formatMode) {
+async function requestChatAnalysisWithFormat(payload, formatMode, model) {
+  const body = {
+    model,
+    max_tokens: aiMaxOutputTokens,
+    temperature: 0.2,
+    messages: [
+      {
+        role: "system",
+        content: `${sandplaySystemPrompt()} 请严格输出 JSON，不要输出 Markdown。`,
+      },
+      {
+        role: "user",
+        content: `请分析以下沙盘资料，并返回符合指定结构的 JSON。\n\n${JSON.stringify(payload, null, 2)}`,
+      },
+    ],
+  };
+
+  if (formatMode === "json_schema") {
+    body.response_format = {
+      type: "json_schema",
+      json_schema: {
+        name: "sandplay_ai_analysis",
+        strict: true,
+        schema: aiAnalysisSchema(),
+      },
+    };
+  } else if (formatMode === "json_object") {
+    body.response_format = { type: "json_object" };
+  }
+
   const apiResponse = await fetch(`${aiBaseUrl}/chat/completions`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${aiApiKey}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      model: aiModel,
-      max_tokens: aiMaxOutputTokens,
-      temperature: 0.2,
-      messages: [
-        {
-          role: "system",
-          content: `${sandplaySystemPrompt()} 请严格输出 JSON，不要输出 Markdown。`,
-        },
-        {
-          role: "user",
-          content: `请分析以下沙盘资料，并返回符合指定结构的 JSON。\n\n${JSON.stringify(payload, null, 2)}`,
-        },
-      ],
-      response_format:
-        formatMode === "json_schema"
-          ? {
-              type: "json_schema",
-              json_schema: {
-                name: "sandplay_ai_analysis",
-                strict: true,
-                schema: aiAnalysisSchema(),
-              },
-            }
-          : { type: "json_object" },
-    }),
+    body: JSON.stringify(body),
   });
 
-  const data = await apiResponse.json().catch(() => ({}));
+  const raw = await apiResponse.text();
+  const data = safeJson(raw);
   if (!apiResponse.ok) {
-    const message = data.error?.message || `AI gateway request failed with HTTP ${apiResponse.status}`;
+    const message = data.error?.message || data.message || raw || `AI gateway request failed with HTTP ${apiResponse.status}`;
     const error = new Error(message);
     error.status = apiResponse.status;
     throw error;
@@ -407,19 +432,182 @@ async function requestChatAnalysisWithFormat(payload, formatMode) {
   if (!text.trim()) throw new Error("AI gateway returned an empty response");
 
   try {
-    return JSON.parse(stripJsonFence(text));
+    return normalizeAiAnalysis(JSON.parse(stripJsonFence(text)));
   } catch (error) {
     throw new Error(`AI response was not valid JSON: ${error.message}`);
   }
+}
+
+function normalizeAiAnalysis(value) {
+  const source = value && typeof value === "object" ? value : {};
+  const hypotheses = toArray(source.psychologicalMeanings || source.psychological_meanings);
+  const reflective = toArray(source.reflective_hypotheses || source.reflectiveHypotheses);
+  const symbolNarrative = toArray(source.symbolNarrative || source.symbol_narrative);
+  const microNarratives = toArray(source.micro_narratives || source.microNarratives);
+  const missing = toStringArray(source.missingInformation || source.missing_information);
+  const questions = toStringArray(source.questionsForClient || source.questions_for_client);
+  const therapistFocus = toStringArray(source.therapistFocus || source.therapist_focus);
+  const risk = toStringArray(source.riskAndLimits || source.risk_and_limits || source.crisis_alert);
+
+  const psychologicalMeanings = hypotheses.length
+    ? hypotheses.map(normalizeMeaning)
+    : reflective.map((item, index) => ({
+        theme: `心理含义假设 ${index + 1}`,
+        evidence: ["来自模型对沙盘结构、来访者讲述与咨询师记录的综合推断。"],
+        possibleMeaning: stringifyItem(item),
+        alternativeMeanings: ["这也可能只是物件审美、摆放习惯或当下任务理解的结果，需要来访者确认。"],
+        howToVerify: ["请来访者为这一部分命名，并询问它与现实生活中的哪种感受或关系有关。"],
+      }));
+
+  const normalizedSymbols = symbolNarrative.length
+    ? symbolNarrative.map(normalizeSymbolNarrative)
+    : microNarratives.map((item, index) => ({
+        symbol: `微叙事 ${index + 1}`,
+        observedRole: stringifyItem(item),
+        hypothesis: "这是可探索的叙事线索，不是确定结论。",
+        question: "这段关系或画面对你来说像什么？",
+      }));
+
+  return {
+    summary: String(
+      source.summary ||
+        source.overall_summary ||
+        source.overallSummary ||
+        source.comprehensive_understanding ||
+        psychologicalMeanings[0]?.possibleMeaning ||
+        "AI 已生成可探索的沙盘假设，请结合来访者讲述进一步确认。",
+    ),
+    psychologicalMeanings: psychologicalMeanings.length ? psychologicalMeanings : fallbackMeanings(),
+    symbolNarrative: normalizedSymbols.length ? normalizedSymbols : fallbackSymbols(),
+    missingInformation: missing.length ? missing : ["来访者对每个重要物件的命名、感受和故事仍需补充。"],
+    questionsForClient: questions.length ? questions : fallbackQuestions(),
+    therapistFocus: therapistFocus.length ? therapistFocus : fallbackTherapistFocus(),
+    riskAndLimits: risk.length ? risk : ["当前输出仅为反思性假设，不能替代临床诊断。", "如出现自伤、伤人或急性危机线索，应立即转介线下专业支持或当地紧急服务。"],
+    confidence: ["低", "中", "高"].includes(source.confidence) ? source.confidence : "中",
+  };
+}
+
+function normalizeMeaning(item, index) {
+  if (typeof item === "string") {
+    return {
+      theme: `心理含义假设 ${index + 1}`,
+      evidence: ["来自模型综合推断。"],
+      possibleMeaning: item,
+      alternativeMeanings: ["需要结合来访者叙述确认。"],
+      howToVerify: ["向来访者追问这一假设是否贴近其经验。"],
+    };
+  }
+  const object = item && typeof item === "object" ? item : {};
+  return {
+    theme: String(object.theme || object.title || `心理含义假设 ${index + 1}`),
+    evidence: toStringArray(object.evidence).length ? toStringArray(object.evidence) : ["来自沙盘结构和叙事材料。"],
+    possibleMeaning: String(object.possibleMeaning || object.possible_meaning || object.meaning || stringifyItem(item)),
+    alternativeMeanings: toStringArray(object.alternativeMeanings || object.alternative_meanings).length
+      ? toStringArray(object.alternativeMeanings || object.alternative_meanings)
+      : ["也可能代表资源、愿望或当下操作选择，需要来访者确认。"],
+    howToVerify: toStringArray(object.howToVerify || object.how_to_verify).length
+      ? toStringArray(object.howToVerify || object.how_to_verify)
+      : ["请来访者讲述这一部分的故事和情绪。"],
+  };
+}
+
+function normalizeSymbolNarrative(item, index) {
+  if (typeof item === "string") {
+    return {
+      symbol: `重要物件 ${index + 1}`,
+      observedRole: item,
+      hypothesis: "这是可探索的物件叙事线索。",
+      question: "这个物件在你的故事里是谁或是什么？",
+    };
+  }
+  const object = item && typeof item === "object" ? item : {};
+  return {
+    symbol: String(object.symbol || object.label || `重要物件 ${index + 1}`),
+    observedRole: String(object.observedRole || object.observed_role || object.role || stringifyItem(item)),
+    hypothesis: String(object.hypothesis || object.meaning || "这是可探索的物件叙事线索。"),
+    question: String(object.question || "这个物件在你的故事里是谁或是什么？"),
+  };
+}
+
+function toArray(value) {
+  if (Array.isArray(value)) return value;
+  if (value === undefined || value === null || value === "") return [];
+  return [value];
+}
+
+function toStringArray(value) {
+  if (Array.isArray(value)) return value.map(stringifyItem).filter(Boolean);
+  if (value && typeof value === "object") {
+    return Object.entries(value).map(([key, item]) => `${key}：${stringifyItem(item)}`);
+  }
+  if (value === undefined || value === null || value === "") return [];
+  return [String(value)];
+}
+
+function stringifyItem(value) {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string") return value;
+  return JSON.stringify(value);
+}
+
+function fallbackMeanings() {
+  return [
+    {
+      theme: "材料不足",
+      evidence: ["AI 未返回完整心理含义结构。"],
+      possibleMeaning: "当前更适合把分析作为访谈提纲，而不是解释结论。",
+      alternativeMeanings: ["沙盘可能仍处于建构早期，意义需要由来访者命名。"],
+      howToVerify: ["请来访者讲述沙盘标题、核心物件和下一步会发生什么。"],
+    },
+  ];
+}
+
+function fallbackSymbols() {
+  return [
+    {
+      symbol: "整体沙盘",
+      observedRole: "作为当前心理场景的整体呈现。",
+      hypothesis: "需要结合来访者叙述理解其含义。",
+      question: "如果这个沙盘会说一句话，它会说什么？",
+    },
+  ];
+}
+
+function fallbackQuestions() {
+  return ["这个沙盘叫什么名字？", "最重要的物件是哪一个？", "哪个部分最想被移动或改变？", "这些物件之间发生了什么？", "这和你现实中的哪个感受或关系有关？"];
+}
+
+function fallbackTherapistFocus() {
+  return ["优先记录来访者自己的命名和故事。", "区分系统假设与来访者确认过的内容。", "关注情绪强度、沉默、迟疑和移动顺序。"];
 }
 
 function sandplaySystemPrompt() {
   return "你是受训心理咨询师的沙盘治疗记录助手。请用中文输出。你的任务是根据沙盘结构、来访者叙述和咨询师记录，生成反思性心理假设、可验证证据和需要追问的问题。请给出3到6条心理含义假设、2到8条重要微缩物叙事、5到10个可问来访者的问题。不要诊断，不要声称确定来访者人格、创伤或疾病；所有解释都必须使用“可能、也许、可探索、需要来访者确认”等假设语言。若材料不足，明确说明缺失信息并给出追问。若出现自伤、伤人、急性危机线索，提示立即联系线下专业人员或当地紧急服务。";
 }
 
-function shouldRetryWithoutJsonSchema(error) {
+function shouldRetryWithSimplerFormat(error) {
   const message = String(error.message || "").toLowerCase();
-  return message.includes("response_format") || message.includes("json_schema") || message.includes("unsupported") || message.includes("invalid parameter");
+  return (
+    error.status === 400 ||
+    error.status === 422 ||
+    message.includes("response_format") ||
+    message.includes("json_schema") ||
+    message.includes("unsupported") ||
+    message.includes("invalid parameter")
+  );
+}
+
+function isModelUnavailable(error) {
+  const message = String(error.message || "").toLowerCase();
+  return error.status === 422 && (message.includes("模型已下线") || message.includes("model") || message.includes("offline"));
+}
+
+function safeJson(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
 }
 
 function stripJsonFence(value) {
