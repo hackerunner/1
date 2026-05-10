@@ -59,7 +59,7 @@ const evidenceItems = [
   {
     title: "Kalff / Lowenfeld tradition",
     meta: "Safe and protected space, World Technique, symbolic expression and nonverbal process.",
-    url: "/RESEARCH_NOTES.md",
+    url: "https://lowenfeld.org/the-world-technique/",
   },
   {
     title: "Mitchell & Friedman",
@@ -90,6 +90,7 @@ let dragState = null;
 let shelfDragState = null;
 let rakeState = null;
 let rakeContext = null;
+let suppressShelfClick = false;
 
 document.addEventListener("DOMContentLoaded", () => {
   cacheElements();
@@ -132,6 +133,8 @@ function cacheElements() {
 
 function bindEvents() {
   window.addEventListener("resize", resizeCanvas);
+  document.addEventListener("dragstart", preventAppNativeDrag);
+  document.addEventListener("selectstart", preventDragSelection);
 
   document.querySelectorAll(".tool-button").forEach((button) => {
     button.addEventListener("click", () => setTool(button.dataset.tool));
@@ -202,7 +205,7 @@ function renderShelf() {
     .map((symbol) => {
       const active = symbol.id === state.activeSymbol ? "active" : "";
       return `
-        <button class="symbol-button ${active}" type="button" data-symbol="${symbol.id}">
+        <button class="symbol-button ${active}" type="button" data-symbol="${symbol.id}" draggable="false">
           <span class="symbol-art">${symbolSvg(symbol)}</span>
           <span>
             <strong>${symbol.label}</strong>
@@ -214,12 +217,18 @@ function renderShelf() {
     .join("");
 
   els.symbolShelf.querySelectorAll(".symbol-button").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
+      if (suppressShelfClick) {
+        suppressShelfClick = false;
+        event.preventDefault();
+        return;
+      }
       state.activeSymbol = button.dataset.symbol;
       setTool("place");
       renderShelf();
     });
     button.addEventListener("pointerdown", onShelfPointerDown);
+    button.addEventListener("dragstart", preventNativeDrag);
   });
 }
 
@@ -237,7 +246,7 @@ function renderItems() {
       const selected = item.id === state.selectedId ? "selected" : "";
       const size = 56 * item.scale;
       return `
-        <button class="scene-item ${selected}" data-id="${item.id}" type="button"
+        <button class="scene-item ${selected}" data-id="${item.id}" type="button" draggable="false"
           style="left:${item.x}%;top:${item.y}%;width:${size}px;height:${size}px;margin-left:${-size / 2}px;margin-top:${-size / 2}px;transform:rotate(${item.rotation}deg)"
           title="${symbol.label}">
           ${symbolSvg(symbol)}
@@ -248,7 +257,7 @@ function renderItems() {
 
   els.sceneItems.querySelectorAll(".scene-item").forEach((node) => {
     node.addEventListener("pointerdown", onItemPointerDown);
-    node.addEventListener("dragstart", (event) => event.preventDefault());
+    node.addEventListener("dragstart", preventNativeDrag);
     node.addEventListener("click", (event) => event.stopPropagation());
   });
 }
@@ -362,8 +371,8 @@ function onTrayPointerDown(event) {
 }
 
 function onShelfPointerDown(event) {
-  event.preventDefault();
   if (event.button !== 0) return;
+  event.preventDefault();
 
   const button = event.currentTarget;
   const symbolId = button.dataset.symbol;
@@ -382,6 +391,7 @@ function onShelfPointerDown(event) {
   button.setPointerCapture(event.pointerId);
   window.addEventListener("pointermove", onShelfPointerMove);
   window.addEventListener("pointerup", onShelfPointerUp, { once: true });
+  window.addEventListener("pointercancel", onShelfPointerCancel, { once: true });
 }
 
 function onShelfPointerMove(event) {
@@ -396,17 +406,24 @@ function onShelfPointerMove(event) {
   }
 
   if (shelfDragState.dragging) {
-    moveDragPreview(event);
+    moveDragPreview(shelfDragState.preview, event);
     els.tray.classList.toggle("tray-drop-ready", isPointInsideTray(event));
   }
 }
 
 function onShelfPointerUp(event) {
   window.removeEventListener("pointermove", onShelfPointerMove);
+  window.removeEventListener("pointercancel", onShelfPointerCancel);
   if (!shelfDragState) return;
 
   const { dragging, symbolId, button } = shelfDragState;
   const droppedOnTray = dragging && isPointInsideTray(event);
+  suppressShelfClick = dragging;
+  if (dragging) {
+    window.setTimeout(() => {
+      suppressShelfClick = false;
+    }, 300);
+  }
 
   cleanupShelfDrag();
   renderShelf();
@@ -421,6 +438,12 @@ function onShelfPointerUp(event) {
   setTool("place");
 }
 
+function onShelfPointerCancel() {
+  window.removeEventListener("pointermove", onShelfPointerMove);
+  cleanupShelfDrag();
+  renderShelf();
+}
+
 function onItemPointerDown(event) {
   event.preventDefault();
   event.stopPropagation();
@@ -429,22 +452,29 @@ function onItemPointerDown(event) {
   pushHistory();
   const item = getItem(id);
   const rect = els.tray.getBoundingClientRect();
+  const nodeRect = event.currentTarget.getBoundingClientRect();
   els.sceneItems.querySelectorAll(".scene-item").forEach((node) => node.classList.toggle("selected", node.dataset.id === id));
-  event.currentTarget.classList.add("dragging");
   dragState = {
     id,
     node: event.currentTarget,
+    symbolId: item.symbolId,
     startClientX: event.clientX,
     startClientY: event.clientY,
     startX: item.x,
     startY: item.y,
     rectWidth: rect.width,
     rectHeight: rect.height,
+    offsetX: event.clientX - nodeRect.left,
+    offsetY: event.clientY - nodeRect.top,
+    size: nodeRect.width,
+    rotation: item.rotation,
     moved: false,
+    preview: null,
   };
   event.currentTarget.setPointerCapture(event.pointerId);
   window.addEventListener("pointermove", onItemPointerMove);
   window.addEventListener("pointerup", onItemPointerUp, { once: true });
+  window.addEventListener("pointercancel", onItemPointerCancel, { once: true });
 }
 
 function onItemPointerMove(event) {
@@ -453,18 +483,25 @@ function onItemPointerMove(event) {
   if (!item) return;
   const dx = ((event.clientX - dragState.startClientX) / dragState.rectWidth) * 100;
   const dy = ((event.clientY - dragState.startClientY) / dragState.rectHeight) * 100;
-  if (Math.abs(dx) > 0.2 || Math.abs(dy) > 0.2) {
+  if (!dragState.moved && (Math.abs(dx) > 0.2 || Math.abs(dy) > 0.2)) {
     dragState.moved = true;
+    dragState.preview = createDragPreview(getSymbol(dragState.symbolId), { size: dragState.size, rotation: dragState.rotation });
+    dragState.node.classList.add("dragging", "drag-origin");
+    document.body.classList.add("is-dragging-item");
+  }
+  if (!dragState.moved) {
+    return;
   }
   item.x = clamp(dragState.startX + dx, 3, 97);
   item.y = clamp(dragState.startY + dy, 4, 96);
-  positionItemNode(dragState.node, item);
+  moveDragPreview(dragState.preview, event, dragState.offsetX, dragState.offsetY);
 }
 
 function onItemPointerUp() {
   window.removeEventListener("pointermove", onItemPointerMove);
+  window.removeEventListener("pointercancel", onItemPointerCancel);
   const moved = Boolean(dragState?.moved);
-  dragState?.node?.classList.remove("dragging");
+  cleanupItemDrag();
   dragState = null;
   if (moved) {
     render();
@@ -473,6 +510,13 @@ function onItemPointerUp() {
   renderItems();
   updateAnalyzeStatus();
   saveDraft();
+}
+
+function onItemPointerCancel() {
+  window.removeEventListener("pointermove", onItemPointerMove);
+  cleanupItemDrag();
+  dragState = null;
+  renderItems();
 }
 
 function positionItemNode(node, item) {
@@ -487,17 +531,23 @@ function positionItemNode(node, item) {
   node.style.transform = `rotate(${item.rotation}deg)`;
 }
 
-function createDragPreview(symbol) {
+function createDragPreview(symbol, options = {}) {
+  const size = options.size || 56;
+  const rotation = options.rotation || 0;
   const preview = document.createElement("div");
   preview.className = "drag-preview";
-  preview.innerHTML = symbolSvg(symbol);
+  preview.style.width = `${size}px`;
+  preview.style.height = `${size}px`;
+  preview.dataset.rotation = String(rotation);
+  preview.innerHTML = `<span class="drag-preview-art">${symbolSvg(symbol)}</span>`;
   document.body.appendChild(preview);
   return preview;
 }
 
-function moveDragPreview(event) {
-  if (!shelfDragState?.preview) return;
-  shelfDragState.preview.style.transform = `translate3d(${event.clientX - 28}px, ${event.clientY - 28}px, 0)`;
+function moveDragPreview(preview, event, offsetX = 28, offsetY = 28) {
+  if (!preview) return;
+  const rotation = Number(preview.dataset.rotation || 0);
+  preview.style.transform = `translate3d(${event.clientX - offsetX}px, ${event.clientY - offsetY}px, 0) rotate(${rotation}deg)`;
 }
 
 function cleanupShelfDrag() {
@@ -506,6 +556,28 @@ function cleanupShelfDrag() {
   document.body.classList.remove("is-dragging-symbol");
   els.tray.classList.remove("tray-drop-ready");
   shelfDragState = null;
+}
+
+function cleanupItemDrag() {
+  dragState?.preview?.remove();
+  dragState?.node?.classList.remove("dragging", "drag-origin");
+  document.body.classList.remove("is-dragging-item");
+}
+
+function preventNativeDrag(event) {
+  event.preventDefault();
+}
+
+function preventAppNativeDrag(event) {
+  if (event.target?.closest?.(".app-shell")) {
+    event.preventDefault();
+  }
+}
+
+function preventDragSelection(event) {
+  if (document.body.classList.contains("is-dragging-symbol") || document.body.classList.contains("is-dragging-item")) {
+    event.preventDefault();
+  }
 }
 
 function isPointInsideTray(event) {
