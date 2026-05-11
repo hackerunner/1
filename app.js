@@ -281,7 +281,7 @@ function renderItems() {
         <button class="scene-item ${selected}" data-id="${item.id}" type="button" draggable="false"
           style="left:${item.x}%;top:${item.y}%;width:${size}px;height:${size}px;margin-left:${-size / 2}px;margin-top:${-size / 2}px;transform:rotate(${item.rotation}deg)"
           title="${symbol.label}">
-          <span class="scene-token">${symbolSvg(symbol)}</span>
+          ${symbolSvg(symbol)}
         </button>
       `;
     })

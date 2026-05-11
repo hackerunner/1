@@ -265,26 +265,13 @@ label span,
 }
 
 .symbol-art {
-  position: relative;
   display: grid;
   place-items: center;
   width: 38px;
   height: 38px;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.16) 30%, transparent 45%),
-    linear-gradient(145deg, #fff7e6, #dbc49d);
-  border: 1px solid rgba(119, 89, 53, 0.24);
-  box-shadow:
-    inset 0 2px 4px rgba(255, 255, 255, 0.72),
-    inset 0 -5px 8px rgba(117, 78, 42, 0.16),
-    0 6px 10px rgba(62, 43, 27, 0.12);
-}
-
-.symbol-art svg {
-  width: 30px;
-  height: 30px;
-  filter: drop-shadow(0 2px 2px rgba(62, 43, 27, 0.18));
+  border-radius: 7px;
+  background: #f2eadf;
+  border: 1px solid #ded1be;
 }
 
 .symbol-button strong,
@@ -373,7 +360,6 @@ textarea {
 
 .tray-shell {
   min-height: 620px;
-  perspective: 1200px;
 }
 
 .analysis-cta {
@@ -540,29 +526,6 @@ textarea {
   user-select: none;
 }
 
-.sand-tray::before,
-.sand-tray::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.sand-tray::before {
-  z-index: 1;
-  box-shadow:
-    inset 0 18px 24px rgba(255, 239, 188, 0.42),
-    inset 0 -26px 32px rgba(86, 52, 24, 0.24),
-    inset 18px 0 24px rgba(86, 52, 24, 0.14),
-    inset -18px 0 24px rgba(255, 239, 188, 0.18);
-}
-
-.sand-tray::after {
-  z-index: 4;
-  border: 1px solid rgba(255, 246, 213, 0.34);
-  border-radius: 2px;
-}
-
 .sand-tray.tray-drop-ready {
   border-color: #277a73;
   box-shadow:
@@ -581,11 +544,9 @@ textarea {
 .rake-canvas {
   width: 100%;
   height: 100%;
-  z-index: 0;
 }
 
 .tray-grid {
-  z-index: 2;
   pointer-events: none;
   background:
     linear-gradient(to right, rgba(91, 61, 43, 0.16) 1px, transparent 1px) 50% 0 / 50% 100%,
@@ -595,7 +556,7 @@ textarea {
 
 .zone-label {
   position: absolute;
-  z-index: 5;
+  z-index: 1;
   padding: 3px 7px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.38);
@@ -630,15 +591,15 @@ textarea {
 
 .scene-item {
   position: absolute;
-  z-index: 6;
+  z-index: 3;
   display: grid;
   place-items: center;
   width: 56px;
   height: 56px;
   margin: -28px 0 0 -28px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.18);
   cursor: grab;
   touch-action: none;
   -webkit-user-drag: none;
@@ -651,8 +612,9 @@ textarea {
 }
 
 .scene-item.selected {
-  outline: 2px solid #203a51;
-  outline-offset: 4px;
+  border-color: #203a51;
+  background: rgba(255, 255, 255, 0.42);
+  box-shadow: 0 8px 16px rgba(32, 58, 81, 0.16);
 }
 
 .scene-item.dragging {
@@ -664,49 +626,10 @@ textarea {
   opacity: 0;
 }
 
-.scene-token,
-.drag-preview-art {
-  position: relative;
-  isolation: isolate;
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 35% 24%, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.18) 31%, transparent 48%),
-    linear-gradient(145deg, #fff3d6 0%, #e0bd81 52%, #b98245 100%);
-  box-shadow:
-    inset 0 3px 5px rgba(255, 255, 255, 0.66),
-    inset 0 -8px 12px rgba(84, 54, 26, 0.24),
-    0 8px 0 rgba(88, 56, 31, 0.16),
-    0 16px 18px rgba(51, 34, 20, 0.18);
-  transform: translateY(-2px);
-}
-
-.scene-token::after,
-.drag-preview-art::after {
-  content: "";
-  position: absolute;
-  left: 15%;
-  right: 15%;
-  bottom: -9px;
-  height: 12px;
-  border-radius: 50%;
-  background: rgba(64, 43, 25, 0.22);
-  filter: blur(3px);
-  z-index: 0;
-}
-
-.scene-token svg,
-.drag-preview-art svg {
-  position: relative;
-  z-index: 1;
-  width: calc(100% - 12px);
-  height: calc(100% - 12px);
-  filter:
-    drop-shadow(0 2px 0 rgba(255, 255, 255, 0.26))
-    drop-shadow(0 5px 4px rgba(75, 48, 24, 0.24));
+.scene-item svg {
+  width: 46px;
+  height: 46px;
+  filter: drop-shadow(0 4px 4px rgba(75, 48, 24, 0.22));
 }
 
 .drag-preview {
@@ -718,10 +641,10 @@ textarea {
   place-items: center;
   width: 56px;
   height: 56px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  box-shadow: none;
+  border: 2px solid rgba(39, 122, 115, 0.65);
+  border-radius: 10px;
+  background: #fff7e8;
+  box-shadow: 0 6px 14px rgba(32, 44, 55, 0.12);
   pointer-events: none;
   user-select: none;
   -webkit-user-select: none;
@@ -729,9 +652,17 @@ textarea {
   will-change: transform;
 }
 
+.drag-preview-art {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
 .drag-preview svg {
-  width: calc(100% - 12px);
-  height: calc(100% - 12px);
+  width: calc(100% - 10px);
+  height: calc(100% - 10px);
+  filter: none;
 }
 
 .notice {
