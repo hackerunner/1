@@ -111,6 +111,12 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (url.pathname === "/archetype.html" || url.pathname === "/archetype") {
+      response.writeHead(302, { Location: "/mystic/" });
+      response.end();
+      return;
+    }
+
     serveStatic(url.pathname, request, response);
   } catch (error) {
     sendJson(response, 500, { error: error.message });
@@ -123,7 +129,8 @@ server.listen(port, "0.0.0.0", () => {
 });
 
 function serveStatic(urlPath, request, response) {
-  const requested = urlPath === "/" ? "/index.html" : decodeURIComponent(urlPath);
+  let requested = urlPath === "/" ? "/index.html" : decodeURIComponent(urlPath);
+  if (requested.endsWith("/")) requested = `${requested}index.html`;
   const filePath = path.normalize(path.join(root, requested));
   const relativePath = path.relative(root, filePath);
 

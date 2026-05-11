@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>星砂原型局 | 娱乐沙盘游戏</title>
+    <link rel="stylesheet" href="/mystic/mystic.css" />
+  </head>
+  <body>
+    <div class="site-shell">
+      <header class="mystic-topbar">
+        <a class="brand" href="/mystic/">
+          <span class="brand-seal" aria-hidden="true">
+            <svg viewBox="0 0 64 64">
+              <circle cx="32" cy="32" r="25" />
+              <path d="M32 10v44M10 32h44M18 18l28 28M46 18 18 46" />
+              <circle cx="32" cy="32" r="7" />
+            </svg>
+          </span>
+          <span>
+            <strong>星砂原型局</strong>
+            <small>娱乐向能量沙盘</small>
+          </span>
+        </a>
+        <nav class="top-actions" aria-label="站点导航">
+          <a href="/">专业沙盘</a>
+          <button id="resetGameBtn" type="button">重开</button>
+          <button id="demoGameBtn" type="button">一键开盘</button>
+        </nav>
+      </header>
+
+      <main class="mystic-layout">
+        <aside class="mystic-panel shelf-panel" aria-label="星砂牌库">
+          <div class="panel-title">
+            <p>Oracle Shelf</p>
+            <h1>星砂牌库</h1>
+          </div>
+          <label class="blind-switch">
+            <input id="blindMode" type="checkbox" checked />
+            <span>盲选真实能量</span>
+          </label>
+          <p class="side-note">先只看图标和名字，凭直觉摆放。分析时再揭示它们背后的项目能量。</p>
+          <div id="energyShelf" class="energy-shelf"></div>
+        </aside>
+
+        <section class="mystic-stage">
+          <section class="mystic-panel query-panel">
+            <div class="panel-title">
+              <p>Question</p>
+              <h2>今天想问什么局？</h2>
+            </div>
+            <div class="query-grid">
+              <label>
+                <span>题目</span>
+                <input id="gameTopic" type="text" value="我当下的项目状态以及突破点" />
+              </label>
+              <label>
+                <span>补充问题</span>
+                <input id="gameQuestion" type="text" placeholder="例如：我该先推进哪条线？" />
+              </label>
+            </div>
+          </section>
+
+          <section class="mystic-panel board-panel">
+            <div class="board-head">
+              <div class="panel-title">
+                <p>Sandbox</p>
+                <h2>星砂盘</h2>
+              </div>
+              <button id="analyzeGameBtn" class="primary-action" type="button">揭示原型</button>
+            </div>
+            <div id="mysticTray" class="mystic-tray" aria-label="星砂沙盘">
+              <span class="axis-label axis-left">潜流</span>
+              <span class="axis-label axis-right">显化</span>
+              <span class="axis-label axis-top">天启</span>
+              <span class="axis-label axis-bottom">成形</span>
+              <div id="placedItems" class="placed-items"></div>
+            </div>
+            <div class="mystic-panel editor-panel">
+              <div>
+                <p class="mini-label">Selected Sigil</p>
+                <h3 id="selectedName">尚未选择星砂</h3>
+                <p id="selectedTruth" class="truth-line">选择一个图标，写一句它给你的直觉感受。</p>
+              </div>
+              <label>
+                <span>主观觉察</span>
+                <input id="awarenessInput" type="text" placeholder="例如：发光、被遮住、很稳、想冲出去、在等待" />
+              </label>
+              <div class="editor-actions">
+                <button id="saveAwarenessBtn" type="button">保存觉察</button>
+                <button id="markSourceBtn" type="button">设为投影源</button>
+                <button id="removeItemBtn" class="danger" type="button">移除</button>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <aside class="mystic-panel result-panel" aria-label="原型揭示">
+          <div class="panel-title">
+            <p>Result</p>
+            <h2>原型揭示</h2>
+          </div>
+          <div class="boundary-note">娱乐性质的象征游戏，不是诊断、预测或咨询结论。</div>
+          <div id="gameStatus" class="status-box">摆放 5 个以上星砂，并记录几条主观觉察，会更像一份类 MBTI 原型画像。</div>
+          <div id="typeResult" class="type-result">
+            <div class="empty-result">等待开盘。</div>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <script src="/mystic/mystic.js" defer></script>
+  </body>
+</html>
