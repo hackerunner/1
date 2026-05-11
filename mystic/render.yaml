@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: starsand
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_BASE_URL
+        value: https://uni-api.cstcloud.cn/v1
+      - key: OPENAI_MODEL
+        value: deepseek-v3.2

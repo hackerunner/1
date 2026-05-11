@@ -4,12 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>星砂原型局 | 娱乐沙盘游戏</title>
-    <link rel="stylesheet" href="/mystic/mystic.css" />
+    <link rel="stylesheet" href="mystic.css" />
   </head>
   <body>
     <div class="site-shell">
       <header class="mystic-topbar">
-        <a class="brand" href="/mystic/">
+        <a class="brand" href="./">
           <span class="brand-seal" aria-hidden="true">
             <svg viewBox="0 0 64 64">
               <circle cx="32" cy="32" r="25" />
@@ -23,7 +23,6 @@
           </span>
         </a>
         <nav class="top-actions" aria-label="站点导航">
-          <a href="/">专业沙盘</a>
           <button id="resetGameBtn" type="button">重开</button>
           <button id="demoGameBtn" type="button">一键开盘</button>
         </nav>
@@ -84,10 +83,21 @@
           <div id="typeResult" class="type-result">
             <div class="empty-result">等待开盘。</div>
           </div>
+          <section class="ai-panel" aria-label="AI 星砂分析">
+            <div class="ai-panel-head">
+              <div>
+                <p class="mini-label">Inner Oracle</p>
+                <h3>AI 星砂分析</h3>
+              </div>
+              <button id="aiMysticBtn" type="button">生成解读</button>
+            </div>
+            <div id="aiMysticStatus" class="status-box">先点击“揭示原型”，再让 AI 读投影源、关键关系和行动指南。</div>
+            <div id="aiMysticOutput" class="ai-output"></div>
+          </section>
         </aside>
       </main>
     </div>
 
-    <script src="/mystic/mystic.js" defer></script>
+    <script src="mystic.js" defer></script>
   </body>
 </html>

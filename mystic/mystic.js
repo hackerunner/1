@@ -23,10 +23,15 @@ const state = {
   activeSigil: "moon-mirror",
   items: [],
   selectedId: null,
+  lastAnalysis: null,
+  aiLoading: false,
+  aiResult: null,
 };
 
 const els = {};
 let dragState = null;
+let shelfDragState = null;
+let suppressShelfClick = false;
 
 document.addEventListener("DOMContentLoaded", () => {
   cacheElements();
@@ -51,6 +56,9 @@ function cacheElements() {
   els.demoGameBtn = document.getElementById("demoGameBtn");
   els.typeResult = document.getElementById("typeResult");
   els.gameStatus = document.getElementById("gameStatus");
+  els.aiMysticBtn = document.getElementById("aiMysticBtn");
+  els.aiMysticStatus = document.getElementById("aiMysticStatus");
+  els.aiMysticOutput = document.getElementById("aiMysticOutput");
 }
 
 function bindEvents() {
@@ -59,6 +67,7 @@ function bindEvents() {
   els.markSourceBtn.addEventListener("click", markSelectedAsSource);
   els.removeItemBtn.addEventListener("click", removeSelected);
   els.analyzeGameBtn.addEventListener("click", analyzeGame);
+  els.aiMysticBtn.addEventListener("click", requestMysticAiAnalysis);
   els.resetGameBtn.addEventListener("click", resetGame);
   els.demoGameBtn.addEventListener("click", seedGame);
   els.awarenessInput.addEventListener("keydown", (event) => {
@@ -84,10 +93,115 @@ function renderShelf() {
 
   els.energyShelf.querySelectorAll(".energy-card").forEach((button) => {
     button.addEventListener("click", () => {
+      if (suppressShelfClick) {
+        suppressShelfClick = false;
+        return;
+      }
       state.activeSigil = button.dataset.sigil;
       renderShelf();
     });
+    button.addEventListener("pointerdown", onShelfPointerDown);
+    button.addEventListener("dragstart", (event) => event.preventDefault());
   });
+}
+
+function onShelfPointerDown(event) {
+  if (event.button !== undefined && event.button !== 0) return;
+  const button = event.currentTarget;
+  const sigilId = button.dataset.sigil;
+  const rect = button.getBoundingClientRect();
+  setActiveShelfCard(sigilId);
+  shelfDragState = {
+    sigilId,
+    startClientX: event.clientX,
+    startClientY: event.clientY,
+    offsetX: event.clientX - rect.left,
+    offsetY: event.clientY - rect.top,
+    preview: null,
+    moved: false,
+  };
+  window.addEventListener("pointermove", onShelfPointerMove);
+  window.addEventListener("pointerup", onShelfPointerUp, { once: true });
+  window.addEventListener("pointercancel", onShelfPointerCancel, { once: true });
+}
+
+function onShelfPointerMove(event) {
+  if (!shelfDragState) return;
+  const dx = event.clientX - shelfDragState.startClientX;
+  const dy = event.clientY - shelfDragState.startClientY;
+  if (!shelfDragState.moved && Math.hypot(dx, dy) < 6) return;
+  if (!shelfDragState.moved) {
+    shelfDragState.moved = true;
+    suppressShelfClick = true;
+    document.body.classList.add("dragging-sigil");
+    shelfDragState.preview = createShelfDragPreview(getSigil(shelfDragState.sigilId));
+    document.body.appendChild(shelfDragState.preview);
+  }
+  positionShelfDragPreview(event.clientX, event.clientY);
+  els.tray.classList.toggle("drop-ready", isPointInTray(event.clientX, event.clientY));
+}
+
+function onShelfPointerUp(event) {
+  window.removeEventListener("pointermove", onShelfPointerMove);
+  window.removeEventListener("pointercancel", onShelfPointerCancel);
+  if (shelfDragState?.moved && isPointInTray(event.clientX, event.clientY)) {
+    const point = trayPoint(event);
+    addItem(shelfDragState.sigilId, point.x, point.y);
+  }
+  cleanupShelfDrag();
+}
+
+function onShelfPointerCancel() {
+  window.removeEventListener("pointermove", onShelfPointerMove);
+  window.removeEventListener("pointerup", onShelfPointerUp);
+  cleanupShelfDrag();
+}
+
+function setActiveShelfCard(sigilId) {
+  state.activeSigil = sigilId;
+  els.energyShelf.querySelectorAll(".energy-card").forEach((node) => {
+    node.classList.toggle("active", node.dataset.sigil === sigilId);
+  });
+}
+
+function createShelfDragPreview(sigil) {
+  const preview = document.createElement("div");
+  preview.className = "sigil-drag-preview";
+  preview.innerHTML = `
+    <span class="sigil-icon">${sigilSvg(sigil)}</span>
+    <strong>${escapeHtml(sigil.label)}</strong>
+  `;
+  return preview;
+}
+
+function positionShelfDragPreview(clientX, clientY) {
+  if (!shelfDragState?.preview) return;
+  shelfDragState.preview.style.transform = `translate(${clientX - shelfDragState.offsetX}px, ${clientY - shelfDragState.offsetY}px)`;
+}
+
+function isPointInTray(clientX, clientY) {
+  const rect = els.tray.getBoundingClientRect();
+  return clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+}
+
+function cleanupShelfDrag() {
+  shelfDragState?.preview?.remove();
+  shelfDragState = null;
+  document.body.classList.remove("dragging-sigil");
+  els.tray.classList.remove("drop-ready");
+  setTimeout(() => {
+    suppressShelfClick = false;
+  }, 0);
+}
+
+function invalidateAnalysis() {
+  state.lastAnalysis = null;
+  state.aiResult = null;
+  if (!els.aiMysticStatus) return;
+  els.aiMysticStatus.textContent = state.items.length
+    ? "盘面已更新。请先重新点击“揭示原型”，再生成 AI 解读。"
+    : "先点击“揭示原型”，再让 AI 读投影源、关键关系和行动指南。";
+  els.aiMysticOutput.innerHTML = "";
 }
 
 function renderItems() {
@@ -149,11 +263,13 @@ function onItemPointerMove(event) {
   const dy = ((event.clientY - dragState.startClientY) / dragState.rectHeight) * 100;
   item.x = clamp(dragState.startX + dx, 3, 97);
   item.y = clamp(dragState.startY + dy, 4, 96);
+  dragState.moved = true;
   positionItem(dragState.id, item);
 }
 
 function onItemPointerUp() {
   window.removeEventListener("pointermove", onItemPointerMove);
+  if (dragState?.moved) invalidateAnalysis();
   dragState = null;
   renderItems();
 }
@@ -178,6 +294,7 @@ function addItem(sigilId, x, y) {
   if (item.isSource) state.items.forEach((existing) => (existing.isSource = false));
   state.items.push(item);
   state.selectedId = item.id;
+  invalidateAnalysis();
   renderItems();
   updateEditor();
 }
@@ -208,6 +325,7 @@ function saveAwareness() {
   const item = selectedItem();
   if (!item) return;
   item.awareness = els.awarenessInput.value.trim();
+  invalidateAnalysis();
   renderItems();
 }
 
@@ -215,6 +333,7 @@ function markSelectedAsSource() {
   const item = selectedItem();
   if (!item) return;
   state.items.forEach((existing) => (existing.isSource = existing.id === item.id));
+  invalidateAnalysis();
   renderItems();
   updateEditor();
 }
@@ -223,6 +342,7 @@ function removeSelected() {
   if (!state.selectedId) return;
   state.items = state.items.filter((item) => item.id !== state.selectedId);
   state.selectedId = null;
+  invalidateAnalysis();
   renderItems();
   updateEditor();
 }
@@ -260,7 +380,11 @@ function seedGame() {
 function resetGame() {
   state.items = [];
   state.selectedId = null;
+  state.lastAnalysis = null;
+  state.aiResult = null;
   els.typeResult.innerHTML = '<div class="empty-result">等待开盘。</div>';
+  els.aiMysticStatus.textContent = "先点击“揭示原型”，再让 AI 读投影源、关键关系和行动指南。";
+  els.aiMysticOutput.innerHTML = "";
   renderItems();
   updateEditor();
 }
@@ -268,10 +392,17 @@ function resetGame() {
 function analyzeGame() {
   if (!state.items.length) {
     els.typeResult.innerHTML = '<div class="empty-result">先在星砂盘里摆几个图标。</div>';
+    state.lastAnalysis = null;
+    els.aiMysticStatus.textContent = "盘面还空着，先摆放几个星砂。";
+    els.aiMysticOutput.innerHTML = "";
     return;
   }
   saveAwareness();
   const analysis = buildAnalysis();
+  state.lastAnalysis = analysis;
+  state.aiResult = null;
+  els.aiMysticStatus.textContent = "本地原型已揭示。可以继续点击“生成解读”，让 AI 读取投影源、关键关系和行动指南。";
+  els.aiMysticOutput.innerHTML = "";
   renderAnalysis(analysis);
 }
 
@@ -285,7 +416,11 @@ function buildAnalysis() {
   const name = axes.map((axis) => axis.word).join("");
   const summary = buildSummary(source, sourceNeighbors, axes);
   const actions = buildActions(source, sourceNeighbors, axes);
-  return { enriched, source, sourceNeighbors, axes, code, name, summary, actions };
+  const topRelations = allRelations(enriched).filter((rel) => rel.weight > 0.42).slice(0, 6);
+  const sourceLines = sourceNeighbors.length
+    ? sourceNeighbors.map((rel) => `“${source.sigil.truth}”靠近“${rel.item.sigil.truth}”：${relationMeaning({ a: source, b: rel.item, level: rel.level })}`)
+    : ["投影源周围没有特别近的星砂，先单独命名它的状态。"];
+  return { enriched, source, sourceNeighbors, topRelations, sourceLines, axes, code, name, summary, actions };
 }
 
 function scoreAxes(items, source, sourceNeighbors) {
@@ -348,10 +483,8 @@ function buildActions(source, sourceNeighbors, axes) {
 }
 
 function renderAnalysis(analysis) {
-  const topRelations = allRelations(analysis.enriched).filter((rel) => rel.weight > 0.42).slice(0, 6);
-  const sourceLines = analysis.sourceNeighbors.length
-    ? analysis.sourceNeighbors.map((rel) => `“${analysis.source.sigil.truth}”靠近“${rel.item.sigil.truth}”：${relationMeaning({ a: analysis.source, b: rel.item, level: rel.level })}`)
-    : ["投影源周围没有特别近的星砂，先单独命名它的状态。"];
+  const topRelations = analysis.topRelations || [];
+  const sourceLines = analysis.sourceLines || [];
 
   els.typeResult.innerHTML = `
     <section class="type-hero">
@@ -385,6 +518,115 @@ function renderAnalysis(analysis) {
   els.gameStatus.textContent = `已生成 ${analysis.name}型。结果只作娱乐参考，真正答案以行动反馈为准。`;
 }
 
+async function requestMysticAiAnalysis() {
+  if (state.aiLoading) return;
+  if (!state.lastAnalysis) analyzeGame();
+  const analysis = state.lastAnalysis;
+  if (!analysis) return;
+
+  state.aiLoading = true;
+  updateAiButton();
+  els.aiMysticStatus.textContent = "AI 正在读取投影源、关键关系和行动指南...";
+  els.aiMysticOutput.innerHTML = '<div class="empty-result">星砂正在重新排列语言。</div>';
+
+  try {
+    const response = await fetch("/api/mystic-analysis", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildMysticAiPayload(analysis)),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `AI 请求失败：HTTP ${response.status}`);
+    state.aiResult = data.analysis;
+    renderMysticAiAnalysis(data.analysis, data.model);
+  } catch (error) {
+    els.aiMysticStatus.textContent = error.message || "AI 解读失败，请稍后再试。";
+    els.aiMysticOutput.innerHTML = "";
+  } finally {
+    state.aiLoading = false;
+    updateAiButton();
+  }
+}
+
+function buildMysticAiPayload(analysis) {
+  return {
+    title: "星砂原型局",
+    mode: "娱乐向盲选象征沙盘",
+    local_result: {
+      code: analysis.code,
+      name: analysis.name,
+      summary: analysis.summary,
+      axes: analysis.axes.map((axis) => ({
+        label: axis.label,
+        tendency: axis.word,
+        percent: axis.percent,
+      })),
+    },
+    source_breakthrough: analysis.sourceLines,
+    key_relations: analysis.topRelations.map((rel) => ({
+      text: relationLine(rel),
+      a: rel.a.sigil.truth,
+      b: rel.b.sigil.truth,
+      level: rel.level,
+      weight: rel.weight,
+      meaning: relationMeaning(rel),
+    })),
+    action_guide: analysis.actions,
+    items: analysis.enriched.map((item) => ({
+      label: item.sigil.label,
+      revealedEnergy: item.sigil.truth,
+      group: item.sigil.group,
+      awareness: item.awareness || "",
+      x: Number((item.x / 100).toFixed(3)),
+      y: Number((item.y / 100).toFixed(3)),
+      isProjectionSource: Boolean(item.isSource),
+    })),
+  };
+}
+
+function renderMysticAiAnalysis(analysis, model) {
+  const sourceReading = displayList(analysis?.sourceReading);
+  const relationshipReading = displayList(analysis?.relationshipReading);
+  const actionGuide = displayList(analysis?.actionGuide);
+  const ritualSuggestion = displayList(analysis?.ritualSuggestion);
+  els.aiMysticStatus.textContent = `AI 解读已生成${model ? `：${model}` : ""}。这仍然只是娱乐性的象征读法。`;
+  els.aiMysticOutput.innerHTML = `
+    <section class="result-card ai-card">
+      <h4>${escapeHtml(analysis?.title || "星砂密语")}</h4>
+      <p>${escapeHtml(analysis?.opening || "这组牌面像是在提示一个需要慢慢靠近的方向。")}</p>
+    </section>
+    <section class="result-card ai-card">
+      <h4>投影源破局</h4>
+      <ul>${sourceReading.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+    </section>
+    <section class="result-card ai-card">
+      <h4>关键关系</h4>
+      <ul>${relationshipReading.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+    </section>
+    <section class="result-card ai-card">
+      <h4>行动指南</h4>
+      <ul>${actionGuide.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+    </section>
+    <section class="result-card ai-card">
+      <h4>小仪式</h4>
+      <ul>${ritualSuggestion.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+      <p class="soft-warning">${escapeHtml(analysis?.softWarning || "请把它当作游戏里的镜子，不要当成命运裁决。")}</p>
+    </section>
+  `;
+}
+
+function updateAiButton() {
+  if (!els.aiMysticBtn) return;
+  els.aiMysticBtn.disabled = state.aiLoading || !state.items.length;
+  els.aiMysticBtn.textContent = state.aiLoading ? "生成中..." : "生成解读";
+}
+
+function displayList(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
+  if (value === undefined || value === null || value === "") return [];
+  return [String(value)];
+}
+
 function axisHtml(axis) {
   return `
     <div class="axis-row">
@@ -409,6 +651,7 @@ function updateStatus() {
   els.gameStatus.textContent = count
     ? `已摆放 ${count} 枚星砂，已记录 ${awarenessCount} 条主观觉察。`
     : "摆放 5 个以上星砂，并记录几条主观觉察，会更像一份原型画像。";
+  updateAiButton();
 }
 
 function nearestRelations(items) {

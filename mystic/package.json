@@ -1,0 +1,12 @@
+{
+  "name": "starsand",
+  "version": "1.0.0",
+  "private": true,
+  "description": "星砂原型局：娱乐向盲选象征沙盘。",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
