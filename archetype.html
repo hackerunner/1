@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MindSand 沙盘原型游戏</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/archetype.css" />
+  </head>
+  <body>
+    <div class="app-shell archetype-app">
+      <header class="topbar">
+        <a class="brand" href="/">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" role="img">
+              <path d="M7 31c8-8 25-8 34 0v8H7z" fill="#dfb66f" />
+              <path d="M13 20c4-8 18-8 22 0 2 4 0 9-4 12H17c-4-3-6-8-4-12z" fill="#4d9b91" />
+              <path d="M20 16h8v20h-8z" fill="#2f4f6f" opacity=".88" />
+            </svg>
+          </span>
+          <span>
+            <strong>MindSand</strong>
+            <small>沙盘原型游戏</small>
+          </span>
+        </a>
+        <nav class="top-actions" aria-label="页面切换">
+          <a class="top-link" href="/">专业沙盘</a>
+          <button id="resetGameBtn" type="button">重开一盘</button>
+          <button id="demoGameBtn" type="button">随机开盘</button>
+        </nav>
+      </header>
+
+      <main class="archetype-layout">
+        <aside class="panel archetype-shelf" aria-label="能量沙具">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Energy Shelf</p>
+              <h1>能量沙具</h1>
+            </div>
+          </div>
+          <label class="switch-row">
+            <input id="blindMode" type="checkbox" checked />
+            <span>盲抽模式</span>
+          </label>
+          <p class="helper-text">先凭直觉选沙具并摆放，再为它写一句“能量状态”。分析时会揭示它对应的项目能量。</p>
+          <div id="energyShelf" class="energy-shelf"></div>
+        </aside>
+
+        <section class="archetype-stage">
+          <section class="panel game-intro">
+            <div>
+              <p class="eyebrow">Archetype Sandbox</p>
+              <h2>类 MBTI 的沙盘原型游戏</h2>
+            </div>
+            <div class="intro-fields">
+              <label>
+                <span>题目</span>
+                <input id="gameTopic" type="text" value="我当下的项目状态以及突破点" />
+              </label>
+              <label>
+                <span>当下最想问的事</span>
+                <input id="gameQuestion" type="text" placeholder="例如：突破点在哪里？我该先做什么？" />
+              </label>
+            </div>
+          </section>
+
+          <section class="panel play-panel">
+            <div class="play-head">
+              <div>
+                <p class="eyebrow">Play Field</p>
+                <h2>沙盘</h2>
+              </div>
+              <button id="analyzeGameBtn" class="analysis-button" type="button">生成原型</button>
+            </div>
+            <div id="archetypeTray" class="archetype-tray" aria-label="娱乐沙盘">
+              <span class="axis-label axis-left">内在</span>
+              <span class="axis-label axis-right">显化</span>
+              <span class="axis-label axis-top">灵感</span>
+              <span class="axis-label axis-bottom">落地</span>
+              <div id="placedItems" class="placed-items"></div>
+            </div>
+            <div id="selectedEditor" class="panel mini-editor">
+              <div>
+                <p class="eyebrow">Selected Energy</p>
+                <h3 id="selectedName">尚未选择沙具</h3>
+                <p id="selectedTruth" class="truth-line">选择一个沙具后，记录它此刻给你的感觉。</p>
+              </div>
+              <label>
+                <span>主观觉察</span>
+                <input id="awarenessInput" type="text" placeholder="例如：有光、很稳、卡住、想冲出去、需要被看见" />
+              </label>
+              <div class="editor-actions">
+                <button id="saveAwarenessBtn" class="secondary-action" type="button">保存觉察</button>
+                <button id="markSourceBtn" class="ghost-action" type="button">设为投影源</button>
+                <button id="removeItemBtn" class="ghost-action danger" type="button">移除</button>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <aside class="panel archetype-report" aria-label="原型结果">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Result</p>
+              <h2>娱乐分析</h2>
+            </div>
+          </div>
+          <div class="notice compact-notice">这是娱乐性质的象征游戏，不是诊断、预测或咨询结论。把它当成一面好玩的镜子。</div>
+          <div id="gameStatus" class="analysis-state">摆放 5 个以上沙具，并至少记录 3 条主观觉察，会更像一份“类 MBTI”画像。</div>
+          <div id="typeResult" class="type-result">
+            <div class="type-empty">等待生成原型。</div>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <script src="/archetype.js" defer></script>
+  </body>
+</html>

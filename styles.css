@@ -154,8 +154,25 @@ label span,
   gap: 8px;
 }
 
-.top-actions button {
+.top-actions button,
+.top-actions .top-link {
   padding: 0 12px;
+}
+
+.top-actions .top-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f7fafb;
+  color: var(--ink);
+}
+
+.top-actions .top-link:hover {
+  border-color: #9eb0bc;
+  background: #edf3f5;
+  text-decoration: none;
 }
 
 .workspace {
