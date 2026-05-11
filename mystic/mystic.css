@@ -186,19 +186,6 @@ label span {
   line-height: 1.2;
 }
 
-.blind-switch {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 12px 0 10px;
-}
-
-.blind-switch input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--gold);
-}
-
 .side-note,
 .truth-line {
   margin: 0 0 12px;
@@ -272,18 +259,6 @@ label span {
 
 .mystic-stage {
   min-width: 0;
-}
-
-.query-panel {
-  display: grid;
-  grid-template-columns: minmax(180px, 0.64fr) minmax(0, 1.36fr);
-  gap: 14px;
-  margin-bottom: 10px;
-}
-
-.query-grid {
-  display: grid;
-  gap: 8px;
 }
 
 label {
@@ -617,7 +592,6 @@ input::placeholder {
   }
 
   .mystic-layout,
-  .query-panel,
   .editor-panel {
     grid-template-columns: 1fr;
   }

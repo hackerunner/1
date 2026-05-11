@@ -38,7 +38,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function cacheElements() {
   els.energyShelf = document.getElementById("energyShelf");
-  els.blindMode = document.getElementById("blindMode");
   els.tray = document.getElementById("mysticTray");
   els.placedItems = document.getElementById("placedItems");
   els.selectedName = document.getElementById("selectedName");
@@ -52,15 +51,9 @@ function cacheElements() {
   els.demoGameBtn = document.getElementById("demoGameBtn");
   els.typeResult = document.getElementById("typeResult");
   els.gameStatus = document.getElementById("gameStatus");
-  els.gameTopic = document.getElementById("gameTopic");
-  els.gameQuestion = document.getElementById("gameQuestion");
 }
 
 function bindEvents() {
-  els.blindMode.addEventListener("change", () => {
-    renderShelf();
-    updateEditor();
-  });
   els.tray.addEventListener("pointerdown", onTrayPointerDown);
   els.saveAwarenessBtn.addEventListener("click", saveAwareness);
   els.markSourceBtn.addEventListener("click", markSelectedAsSource);
@@ -74,7 +67,6 @@ function bindEvents() {
 }
 
 function renderShelf() {
-  const blind = els.blindMode.checked;
   els.energyShelf.innerHTML = sigils
     .map((sigil) => {
       const active = state.activeSigil === sigil.id ? "active" : "";
@@ -83,7 +75,7 @@ function renderShelf() {
           <span class="sigil-icon">${sigilSvg(sigil)}</span>
           <span>
             <strong>${sigil.label}</strong>
-            <small>${blind ? "真实能量隐藏中" : sigil.truth}</small>
+            <small>盲选中</small>
           </span>
         </button>
       `;
@@ -192,7 +184,6 @@ function addItem(sigilId, x, y) {
 
 function updateEditor() {
   const item = selectedItem();
-  const blind = els.blindMode.checked;
   if (!item) {
     els.selectedName.textContent = "尚未选择星砂";
     els.selectedTruth.textContent = "选择一个图标，写一句它给你的直觉感受。";
@@ -205,7 +196,7 @@ function updateEditor() {
   }
   const sigil = getSigil(item.sigilId);
   els.selectedName.textContent = item.isSource ? `${sigil.label} · 投影源` : sigil.label;
-  els.selectedTruth.textContent = blind ? "盲选中：真实能量会在揭示时出现。" : `真实能量：${sigil.truth}`;
+  els.selectedTruth.textContent = "盲选中：先记录直觉，不提前识别它代表什么。";
   els.awarenessInput.disabled = false;
   els.saveAwarenessBtn.disabled = false;
   els.markSourceBtn.disabled = false;
@@ -343,7 +334,7 @@ function buildSummary(source, sourceNeighbors, axes) {
     : "它周围很空，说明这局要先把源头单独看清。";
   const energyLine = axes[0].code === "M" ? "你这盘需要被看见，藏着做会散。" : "你这盘先靠内在校准，急着外放会乱。";
   const moveLine = axes[1].code === "S" ? "动力是星火：先点燃一个可见动作。" : "动力是潮汐：先顺势调节节奏和位置。";
-  return `投影源是“${source.sigil.label}”，真实能量指向“${source.sigil.truth}”，你给它的状态是“${stateText}”。${closestText}${energyLine}${moveLine}`;
+  return `投影源是“${source.sigil.label}”，揭示后对应“${source.sigil.truth}”，你给它的状态是“${stateText}”。${closestText}${energyLine}${moveLine}`;
 }
 
 function buildActions(source, sourceNeighbors, axes) {
@@ -387,7 +378,7 @@ function renderAnalysis(analysis) {
       <ul>${analysis.actions.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
     </section>
     <section class="result-card">
-      <h4>真实能量揭示</h4>
+      <h4>盲选揭示</h4>
       <div class="energy-map">${analysis.enriched.map(energyMapHtml).join("")}</div>
     </section>
   `;
@@ -417,7 +408,7 @@ function updateStatus() {
   const awarenessCount = state.items.filter((item) => item.awareness).length;
   els.gameStatus.textContent = count
     ? `已摆放 ${count} 枚星砂，已记录 ${awarenessCount} 条主观觉察。`
-    : "摆放 5 个以上星砂，并记录几条主观觉察，会更像一份类 MBTI 原型画像。";
+    : "摆放 5 个以上星砂，并记录几条主观觉察，会更像一份原型画像。";
 }
 
 function nearestRelations(items) {
